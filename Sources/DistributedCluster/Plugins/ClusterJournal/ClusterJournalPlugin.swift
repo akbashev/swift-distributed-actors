@@ -11,11 +11,10 @@ public actor ClusterJournalPlugin {
   private var restoringActorTasks: [PersistenceID: Task<Void, Never>] = [:]
   
   public func emit<E: Codable>(_ event: E, id persistenceId: PersistenceID) async throws {
-    guard self.restoringActorTasks[persistenceId] == .none else {
+    if self.restoringActorTasks[persistenceId] != .none {
       await withCheckedContinuation { continuation in
         self.emitContinuations[persistenceId, default: []].append(continuation)
       }
-      return try await store.persistEvent(event, id: persistenceId)
     }
     try await store.persistEvent(event, id: persistenceId)
   }

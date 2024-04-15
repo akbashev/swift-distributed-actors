@@ -3,51 +3,41 @@ import Distributed
 //// Here magic should happen
 public actor ClusterJournalPlugin {
     
-  public enum Error: Swift.Error {
-    case factoryError
-  }
-  
   private var actorSystem: ClusterSystem!
-  private var store: (ClusterSystem) async throws -> (any EventStore)
+  private var store: AnyEventStore!
+  
+  private var factory: (ClusterSystem) async throws -> (any EventStore)
   private var emitContinuations: [PersistenceID: [CheckedContinuation<Void, Never>]] = [:]
   private var restoringActorTasks: [PersistenceID: Task<Void, Never>] = [:]
   
-  public func emit<A: EventSourced>(_ event: A.Event, from actor: A) async throws {
-    let store = try await self.store(self.actorSystem)
-    try await actor.whenLocal { myself in
-      let persistenceId = myself.persistenceId
-      /// Checking if actor is in restoring state, if yes—wating until finished
-      guard await self.restoringActorTasks[persistenceId] == .none else {
-        await withCheckedContinuation { continuation in
-          self.emitContinuations[persistenceId, default: []].append(continuation)
-        }
-        return try await store.persistEvent(event, id: persistenceId)
+  public func emit<E: Codable>(_ event: E, id persistenceId: PersistenceID) async throws {
+    guard self.restoringActorTasks[persistenceId] == .none else {
+      await withCheckedContinuation { continuation in
+        self.emitContinuations[persistenceId, default: []].append(continuation)
       }
-      try await store.persistEvent(event, id: persistenceId)
+      return try await store.persistEvent(event, id: persistenceId)
     }
+    try await store.persistEvent(event, id: persistenceId)
   }
   
-  public func restoreEventsFor<A: EventSourced>(actor: A) async {
-    await actor.whenLocal { [weak self] myself in
-      let persistenceId = myself.persistenceId
-      guard await self?.restoringActorTasks[persistenceId] == .none else { return }
+  /// As we already checked whenLocal on `actorReady`—would be nice to have some type level understanding already here and not to double check...
+  public func restoreEventsFor<A: EventSourced>(actor: A, id persistenceId: PersistenceID) async {
+    /// Checking if actor is already in restoring state
+    guard self.restoringActorTasks[persistenceId] == .none else { return }
+    self.restoringActorTasks[persistenceId] = Task { [weak actor, weak self] in
       defer { Task { [weak self] in await self?.removeTaskFor(id: persistenceId) } }
-      /// Checking if actor is already in restoring state
-      let task = Task { [weak self] in
-        do {
-          let store = try await self!.store(self!.actorSystem)
-          let events: [A.Event] = try await store.eventsFor(id: persistenceId)
+      do {
+        let events: [A.Event] = (try await self?.store.eventsFor(id: persistenceId)) ?? []
+        await actor?.whenLocal { myself in
           for event in events {
-            try await actor.handleEvent(event)
+            myself.handleEvent(event)
           }
-        } catch {
-          // TODO: Add retry mechanism?
-          await self?.actorSystem.log.error(
-            "Cluster journal haven't been able to restore state of an actor \(persistenceId), reason: \(error)"
-          )
         }
+      } catch {
+        await self?.actorSystem.log.error(
+          "Cluster journal haven't been able to restore state of an actor \(persistenceId), reason: \(error)"
+        )
       }
-      await self?.addTask(task, id: persistenceId)
     }
   }
   
@@ -58,26 +48,15 @@ public actor ClusterJournalPlugin {
     self.emitContinuations.removeValue(forKey: id)
   }
   
-  // TODO: Remove when we can pass inherite isolation
-  private func addTask(_ task: Task<Void, Never>, id: PersistenceID) {
-    self.restoringActorTasks[id] = task
-  }
-  
   private func removeTaskFor(id: PersistenceID) {
     self.restoringActorTasks.removeValue(forKey: id)
     self.finishContinuationsFor(id: id)
   }
     
-  public init<E: EventStore>(
-    factory: @escaping (ClusterSystem) -> E
+  public init(
+    factory: @escaping (ClusterSystem) -> any EventStore
   ) {
-    self.store = {
-      try await $0
-        .singleton
-        .host(name: "\(ClusterJournalPlugin.pluginKey)_store") {
-          factory($0)
-        }
-    }
+    self.factory = factory
   }
 }
 
@@ -90,10 +69,16 @@ extension ClusterJournalPlugin: _Plugin {
   
   public func start(_ system: ClusterSystem) async throws {
     self.actorSystem = system
+    self.store = try await system
+      .singleton
+      .host(name: "\(ClusterJournalPlugin.pluginKey)_store") {
+        try await AnyEventStore(actorSystem: $0, store: self.factory($0))
+      }
   }
   
   public func stop(_ system: ClusterSystem) async {
     self.actorSystem = nil
+    self.store = nil
     for task in self.restoringActorTasks.values { task.cancel() }
   }
 }
@@ -111,6 +96,30 @@ extension ClusterSystem {
 
 extension EventSourced where ActorSystem == ClusterSystem {
   public func emit(event: Event) async throws {
-    try await self.actorSystem.journal.emit(event, from: self)
+    try await self.whenLocal { [weak self] myself in
+      try await self?.actorSystem.journal.emit(event, id: myself.persistenceId)
+    }
+  }
+}
+
+/// Not sure if it's correct way, basically wrapping `any EventStore` into `AnyEventStore` which is singleton
+distributed actor AnyEventStore: EventStore, ClusterSingleton {
+  
+  private var store: any EventStore
+  
+  distributed func persistEvent<Event: Codable>(_ event: Event, id: PersistenceID) async throws {
+    try await store.persistEvent(event, id: id)
+  }
+  
+  distributed func eventsFor<Event: Codable>(id: PersistenceID) async throws -> [Event] {
+    try await store.eventsFor(id: id)
+  }
+  
+  init(
+    actorSystem: ActorSystem,
+    store: any EventStore
+  ) {
+    self.actorSystem = actorSystem
+    self.store = store
   }
 }

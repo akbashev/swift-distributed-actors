@@ -1051,7 +1051,11 @@ extension ClusterSystem {
         }
       
         if let eventSourced = actor as? (any EventSourced) {
-            Task { [weak self] in await self?.journal.restoreEventsFor(actor: eventSourced) }
+            Task { [weak eventSourced] in
+              await eventSourced?.whenLocal { [weak self] myself in
+                await self?.journal.restoreEventsFor(actor: myself, id: myself.persistenceId)
+              }
+            }
         }
     }
 

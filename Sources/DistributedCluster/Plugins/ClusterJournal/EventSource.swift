@@ -19,7 +19,7 @@ public protocol EventSourced: DistributedActor {
   distributed func handleEvent(_ event: Event)
 }
 
-public protocol EventStore: ClusterSingleton {
-  distributed func persistEvent<Event: Codable>(_ event: Event, id: PersistenceID) async throws
-  distributed func eventsFor<Event: Codable>(id: PersistenceID) async throws -> [Event]
+public protocol EventStore {
+  func persistEvent<Event: Codable>(_ event: Event, id: PersistenceID) async throws
+  func eventsFor<Event: Codable>(id: PersistenceID) async throws -> [Event]
 }

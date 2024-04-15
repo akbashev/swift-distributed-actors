@@ -79,6 +79,8 @@ extension ClusterJournalPlugin: _Plugin {
     self.actorSystem = nil
     self.store = nil
     for task in self.restoringActorTasks.values { task.cancel() }
+    for emit in self.emitContinuations.values.flatMap({ $0 }) { emit.resume() }
+    self.emitContinuations.removeAll()
   }
 }
 

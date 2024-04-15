@@ -20,7 +20,7 @@ public actor ClusterJournalPlugin {
   }
   
   /// As we already checked whenLocal on `actorReady`—would be nice to have some type level understanding already here and not to double check...
-  public func restoreEventsFor<A: EventSourced>(actor: A, id persistenceId: PersistenceID) async {
+  public func restoreEventsFor<A: EventSourced>(actor: A, id persistenceId: PersistenceID) {
     /// Checking if actor is already in restoring state
     guard self.restoringActorTasks[persistenceId] == .none else { return }
     self.restoringActorTasks[persistenceId] = Task { [weak actor, weak self] in
@@ -99,6 +99,7 @@ extension EventSourced where ActorSystem == ClusterSystem {
   public func emit(event: Event) async throws {
     try await self.whenLocal { [weak self] myself in
       try await self?.actorSystem.journal.emit(event, id: myself.persistenceId)
+      myself.handleEvent(event)
     }
   }
 }

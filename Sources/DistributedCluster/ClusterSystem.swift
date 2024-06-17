@@ -1049,6 +1049,14 @@ extension ClusterSystem {
         if let wellKnownName = actor.id.metadata.wellKnown {
             self._managedWellKnownDistributedActors[wellKnownName] = actor
         }
+      
+        if let eventSourced = actor as? (any EventSourced) {
+            Task { [weak eventSourced] in
+              await eventSourced?.whenLocal { [weak self] myself in
+                await self?.journal.restoreEventsFor(actor: myself, id: myself.persistenceId)
+              }
+            }
+        }
     }
 
     /// Advertise to the cluster system that a "well known" distributed actor has become ready.

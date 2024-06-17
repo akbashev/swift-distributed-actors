@@ -119,14 +119,29 @@ public struct WeakAnyDistributedActorDictionary {
     }
 }
 
-final class Weak<Act: DistributedActor> {
-    weak var actor: Act?
-
-    init(_ actor: Act) {
-        self.actor = actor
+final class LocalActorRef<Act: DistributedActor> {
+  private weak var weakLocalRef: Act?
+  private let remoteRef: Act?
+  
+  public init(_ actor: Act) {
+    if __isRemoteActor(actor) {
+      self.remoteRef = actor
+      self.weakLocalRef = nil
+    } else {
+      self.remoteRef = nil
+      self.weakLocalRef = actor
     }
-
-    init(idForRemoval id: ClusterSystem.ActorID) {
-        self.actor = nil
-    }
+    
+    assert((self.remoteRef == nil && self.weakLocalRef != nil) ||
+           (self.remoteRef != nil && self.weakLocalRef == nil),
+           "Only a single var may hold the actor: remote: \(self.remoteRef, orElse: "nil"), \(self.weakLocalRef, orElse: "nil")")
+  }
+  
+  public var actor: Act? {
+    remoteRef ?? weakLocalRef
+  }
+  
+  public var description: String {
+    "DistributedActorRef.WeakWhenLocal(\(self.actor, orElse: "nil"), isLocal: \(self.remoteRef == nil))"
+  }
 }

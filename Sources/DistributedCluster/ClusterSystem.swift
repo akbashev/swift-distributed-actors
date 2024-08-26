@@ -1039,7 +1039,7 @@ extension ClusterSystem {
         }
 
         // Spawn a behavior actor for it:
-        let behavior = InvocationBehavior.behavior(instance: LocalActorRef(actor))
+        let behavior = InvocationBehavior.behavior(instance: actor)
         let ref = self._spawnDistributedActor(behavior, identifiedBy: actor.id)
 
         // Store references

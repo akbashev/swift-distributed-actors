@@ -34,10 +34,10 @@ public struct InvocationMessage: Sendable, Codable, CustomStringConvertible {
 
 // FIXME(distributed): remove [#957](https://github.com/apple/swift-distributed-actors/issues/957)
 enum InvocationBehavior {
-    static func behavior(instance: LocalActorRef<some DistributedActor>) -> _Behavior<InvocationMessage> {
+    static func behavior(instance: some DistributedActor) -> _Behavior<InvocationMessage> {
         return _Behavior.setup { context in
-            return ._receiveMessageAsync { (message) async throws -> _Behavior<InvocationMessage> in
-                guard let instance = instance.actor else {
+            return ._receiveMessageAsync { [weak instance] (message) async throws -> _Behavior<InvocationMessage> in
+                guard instance != .none else {
                     context.log.warning("Received message \(message) while distributed actor instance was released! Stopping...")
                     context.system.personalDeadLetters(type: InvocationMessage.self, recipient: context.id).tell(message)
                     return .stop
@@ -46,11 +46,11 @@ enum InvocationBehavior {
                 // `InvocationMessage`s are handled in `UserMessageHandler`
                 // old impl: await context.system.receiveInvocation(actor: instance, message: message)
                 return fatalErrorBacktrace("We don't invoke distributed actors via the behavior runtime anymore! ")
-            }.receiveSignal { _, signal in
+            }.receiveSignal { [weak instance] _, signal in
 
                 // We received a signal, but our target actor instance was already released;
                 // This should not really happen, but let's handle it by stopping the behavior.
-                guard let instance = instance.actor else {
+                guard let instance else {
                     return .stop
                 }
 

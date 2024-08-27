@@ -1855,3 +1855,33 @@ public enum RemoteCall {
         try await Self.$timeout.withValue(timeout, operation: remoteCall)
     }
 }
+
+extension ClusterSystem {
+    func _isAssigned(id: ActorID) -> Bool {
+        self.namingLock.withLock {
+            // Are we in the middle of initializing an actor with this ActorID?
+            if self._reservedNames.contains(id) {
+                return true
+            }
+
+            // Do we have a known, managed, distributed actor with this ActorID?
+            if self._managedDistributedActors.get(identifiedBy: id) != nil {
+                return true
+            }
+
+            // Maybe it is a well-known actor? Those we store separately (and with strong ref)?
+            if let wellKnownName = id.metadata.wellKnown {
+                if self._managedWellKnownDistributedActors[wellKnownName] != nil {
+                    return true
+                }
+            }
+
+            // well, maybe it's an ActorRef after all?
+            if self._managedRefs[id] != nil {
+                return true
+            }
+
+            return false
+        }
+    }
+}

@@ -15,11 +15,11 @@
 @testable import DistributedCluster
 import XCTest
 
-final class FixedThreadPoolTests: XCTestCase {
-    func test_pool_shouldProperlyShutdownAllThreads() throws {
-        let pool = try _FixedThreadPool(4)
-        pool.runningWorkers.load(ordering: .relaxed).shouldEqual(4)
-        pool.shutdown()
-        pool.runningWorkers.load(ordering: .relaxed).shouldEqual(0)
-    }
-}
+//final class FixedThreadPoolTests: XCTestCase {
+//    func test_pool_shouldProperlyShutdownAllThreads() throws {
+//        let pool = try _FixedThreadPool(4)
+//        pool.runningWorkers.load(ordering: .relaxed).shouldEqual(4)
+//        pool.shutdown()
+//        pool.runningWorkers.load(ordering: .relaxed).shouldEqual(0)
+//    }
+//}

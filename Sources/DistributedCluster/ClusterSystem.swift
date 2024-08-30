@@ -57,7 +57,7 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
 
     private var _associationTombstoneCleanupTask: RepeatedTask?
 
-    private let dispatcher: InternalMessageDispatcher
+    private let dispatcher: DefaultDispatcher
 
     // Access MUST be protected with `namingLock`.
     private var _managedRefs: [ActorID: _ReceivesSystemMessages] = [:]
@@ -245,7 +245,7 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
         self._eventLoopGroup = eventLoopGroup
 
         // TODO(swift): Remove all of our own dispatchers and move to Swift Concurrency
-        self.dispatcher = try! _FixedThreadPool(settings.threadPoolSize)
+        self.dispatcher = DefaultDispatcher()
 
         // initialize top level guardians
         self._root = TheOneWhoHasNoParent(local: settings.bindNode)
@@ -521,7 +521,6 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
         }
         self.userProvider.stopAll()
         self.systemProvider.stopAll()
-        self.dispatcher.shutdown()
 
         // Release system all actors
         self.initLock.withLockVoid {
@@ -672,8 +671,10 @@ extension ClusterSystem: _ActorRefFactory {
 
         return try provider._spawn(
             system: self,
-            behavior: behavior, id: id,
-            dispatcher: dispatcher, props: props,
+            behavior: behavior,
+            id: id,
+            dispatcher: dispatcher,
+            props: props,
             startImmediately: startImmediately
         )
     }
@@ -1853,5 +1854,29 @@ public enum RemoteCall {
     @discardableResult
     public static func with<Response>(timeout: Duration, remoteCall: () async throws -> Response) async rethrows -> Response {
         try await Self.$timeout.withValue(timeout, operation: remoteCall)
+    }
+}
+
+// FIXME: Temp wrapper before updating/removing MessageDispatcher
+class DefaultDispatcher: MessageDispatcher {
+    
+    actor _Dispatcher {
+        func dispatch(_ f: @escaping () -> Void) {
+            f()
+        }
+    }
+    
+    let dispatcher: _Dispatcher
+    var name: String {
+        _hackyPThreadThreadId()
+    }
+
+    
+    func execute(_ f: @escaping () -> Void) {
+        Task { [weak dispatcher] in await dispatcher?.dispatch(f) }
+    }
+    
+    init() {
+        self.dispatcher = .init()
     }
 }

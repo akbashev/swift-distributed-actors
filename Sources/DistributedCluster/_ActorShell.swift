@@ -141,9 +141,12 @@ public final class _ActorShell<Message: Codable>: _ActorContext<Message>, Abstra
     // MARK: _ActorShell implementation
 
     internal init(
-        system: ClusterSystem, parent: _AddressableActorRef,
-        behavior: _Behavior<Message>, id: ActorID,
-        props: _Props, dispatcher: MessageDispatcher
+        system: ClusterSystem,
+        parent: _AddressableActorRef,
+        behavior: _Behavior<Message>,
+        id: ActorID,
+        props: _Props,
+        dispatcher: MessageDispatcher
     ) {
         self._system = system
         self._parent = parent

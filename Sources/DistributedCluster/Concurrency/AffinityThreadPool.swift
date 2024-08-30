@@ -73,11 +73,11 @@ internal final class AffinityThreadPool {
     internal struct Worker {
         @usableFromInline
         internal let taskQueue: _LinkedBlockingQueue<() -> Void>
-        private let thread: _Thread
+        private let task: Task<Void, Never>
 
         internal init(stopped: ManagedAtomic<Bool>) throws {
             let queue: _LinkedBlockingQueue<() -> Void> = _LinkedBlockingQueue()
-            let thread = try _Thread {
+            self.task = Task {
                 while !stopped.load(ordering: .acquiring) {
                     // TODO: We are doing a timed poll here to guarantee that we
                     // will eventually check if stopped has been set, even if no
@@ -89,7 +89,6 @@ internal final class AffinityThreadPool {
                     }
                 }
             }
-            self.thread = thread
             self.taskQueue = queue
         }
     }

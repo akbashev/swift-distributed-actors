@@ -140,7 +140,7 @@ final class DeathWatchTests: SingleClusterSystemXCTestCase {
         // most notably, NOT the `signal:...` message
     }
 
-    func test_watch_fromMultipleActors_shouldTriggerTerminatedWhenWatchedActorStops() throws {
+    func test_watch_fromMultipleActors_shouldTriggerTerminatedWhenWatchedActorStops() async throws {
         let p = self.testKit.makeTestProbe("p", expecting: String.self)
         let p1 = self.testKit.makeTestProbe("p1", expecting: String.self)
         let p2 = self.testKit.makeTestProbe("p2", expecting: String.self)
@@ -162,7 +162,7 @@ final class DeathWatchTests: SingleClusterSystemXCTestCase {
 
 //    try p1.expectTerminated(stoppableRef)
 //    try p2.expectTerminated(stoppableRef)
-        _Thread.sleep(.milliseconds(1000))
+        try await Task.sleep(for: .milliseconds(1000))
     }
 
     func test_watch_fromMultipleActors_shouldNotifyOfTerminationOnlyCurrentWatchers() throws {

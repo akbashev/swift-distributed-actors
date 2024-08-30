@@ -610,7 +610,7 @@ public class _Guardian {
                     "error": "\(failure)",
                 ])
 
-                _ = Task {
+                Task {
                     try! await system.shutdown().wait() // so we don't block anyone who sent us this signal (as we execute synchronously in the guardian)
                     print("Guardian shutdown of [\(system.name)] ClusterSystem complete.")
                 }

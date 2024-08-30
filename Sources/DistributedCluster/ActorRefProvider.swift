@@ -142,8 +142,10 @@ internal struct LocalActorRefProvider: _ActorRefProvider {
 
     func _spawn<Message>(
         system: ClusterSystem,
-        behavior: _Behavior<Message>, id: ActorID,
-        dispatcher: MessageDispatcher, props: _Props,
+        behavior: _Behavior<Message>,
+        id: ActorID,
+        dispatcher: MessageDispatcher,
+        props: _Props,
         startImmediately: Bool
     ) throws -> _ActorRef<Message>
         where Message: Codable

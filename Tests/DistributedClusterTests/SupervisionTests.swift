@@ -277,7 +277,7 @@ final class SupervisionTests: SingleClusterSystemXCTestCase {
         try boomExpectBackoffRestart(expectedBackoff: .milliseconds(400))
     }
 
-    func sharedTestLogic_restartAtMostWithin_throws_shouldRestartNoMoreThanAllowedWithinPeriod(runName: String, makeEvilMessage: (String) -> FaultyMessage) throws {
+    func sharedTestLogic_restartAtMostWithin_throws_shouldRestartNoMoreThanAllowedWithinPeriod(runName: String, makeEvilMessage: (String) -> FaultyMessage) async throws {
         let p = self.testKit.makeTestProbe(expecting: WorkerMessages.self)
         let pp = self.testKit.makeTestProbe(expecting: Never.self)
 
@@ -309,7 +309,7 @@ final class SupervisionTests: SingleClusterSystemXCTestCase {
         guard case .setupRunning = try p.expectMessage() else { throw p.error() }
 
         pinfo("\(Date()) :: Giving enough breathing time to replenish the restart period (\(failurePeriod))")
-        _Thread.sleep(failurePeriod)
+        try await Task.sleep(for: failurePeriod)
         pinfo("\(Date()) :: Done sleeping...")
 
         pinfo("2nd boom...")
@@ -454,8 +454,8 @@ final class SupervisionTests: SingleClusterSystemXCTestCase {
         )
     }
 
-    func test_restartAtMostWithin_throws_shouldRestartNoMoreThanAllowedWithinPeriod() throws {
-        try self.sharedTestLogic_restartAtMostWithin_throws_shouldRestartNoMoreThanAllowedWithinPeriod(
+    func test_restartAtMostWithin_throws_shouldRestartNoMoreThanAllowedWithinPeriod() async throws {
+        try await self.sharedTestLogic_restartAtMostWithin_throws_shouldRestartNoMoreThanAllowedWithinPeriod(
             runName: "throws",
             makeEvilMessage: { msg in
                 FaultyMessage.pleaseThrow(error: FaultyError.boom(message: msg))

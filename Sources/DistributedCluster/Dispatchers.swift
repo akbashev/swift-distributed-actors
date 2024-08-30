@@ -40,17 +40,6 @@ internal protocol InternalMessageDispatcher: MessageDispatcher {
     func shutdown()
 }
 
-extension _FixedThreadPool: InternalMessageDispatcher {
-    public var name: String {
-        _hackyPThreadThreadId()
-    }
-
-    @inlinable
-    public func execute(_ task: @escaping () -> Void) {
-        self.submit(task)
-    }
-}
-
 // MARK: Calling _Thread Dispatcher
 
 /// Use with great caution!! Hijacks the calling thread to execute the actor.

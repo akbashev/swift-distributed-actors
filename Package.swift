@@ -121,7 +121,14 @@ var targets: [PackageDescription.Target] = [
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ]
     ),
-
+    .executableTarget(
+        name: "swift-clusterd",
+        dependencies: [
+            "DistributedCluster",
+            .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        ],
+        path: "Sources/Clusterd"
+    ),
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Multi Node Tests
 
@@ -186,7 +193,7 @@ var dependencies: [Package.Dependency] = [
 
     // ~~~ Swift libraries ~~~
     .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0-beta"),
-    .package(url: "https://github.com/apple/swift-collections", from: "1.0.5"),
+    .package(url: "https://github.com/apple/swift-collections", from: "1.1.0"),
 
     // ~~~ Observability ~~~
     .package(url: "https://github.com/apple/swift-log", from: "1.0.0"),

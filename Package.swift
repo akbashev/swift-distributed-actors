@@ -17,7 +17,11 @@ let products: [PackageDescription.Product] = [
     .library(
         name: "DistributedCluster",
         targets: ["DistributedCluster"]
-    )
+    ),
+    .library(
+        name: "NewDistributedCluster",
+        targets: ["NewDistributedCluster"]
+    ),
 ]
 
 // ==== ----------------------------------------------------------------------------------------------------------------
@@ -41,15 +45,29 @@ var targets: [PackageDescription.Target] = [
             .product(name: "NIOSSL", package: "swift-nio-ssl"),
             .product(name: "NIOExtras", package: "swift-nio-extras"),
             .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-            .product(name: "Logging", package: "swift-log"),
             .product(name: "Metrics", package: "swift-metrics"),
             .product(name: "ServiceDiscovery", package: "swift-service-discovery"),
-            .product(name: "Backtrace", package: "swift-backtrace"),
             .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
         ],
         swiftSettings: [.swiftLanguageMode(.v5)]
     ),
-
+    .target(
+        name: "NewDistributedCluster",
+        dependencies: [
+            .product(name: "NIO", package: "swift-nio"),
+            .product(name: "NIOPosix", package: "swift-nio"),
+            .product(name: "NIOFoundationCompat", package: "swift-nio"),
+            .product(name: "NIOSSL", package: "swift-nio-ssl"),
+            .product(name: "NIOExtras", package: "swift-nio-extras"),
+            .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            .product(name: "Metrics", package: "swift-metrics"),
+            .product(name: "ServiceDiscovery", package: "swift-service-discovery"),
+        ],
+        swiftSettings: [
+            //            .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+            //            .enableUpcomingFeature("InferIsolatedConformances"),
+        ]
+    ),
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: TestKit
 
@@ -86,6 +104,13 @@ var targets: [PackageDescription.Target] = [
         swiftSettings: [.swiftLanguageMode(.v5)]
     ),
 
+    .testTarget(
+        name: "NewDistributedClusterTests",
+        dependencies: [
+            "NewDistributedCluster",
+            .product(name: "Subprocess", package: "swift-subprocess"),
+        ]
+    ),
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: MultiNodeTestKit
 
@@ -108,7 +133,6 @@ var targets: [PackageDescription.Target] = [
         dependencies: [
             "DistributedCluster",
             // "DistributedActorsTestKit", // can't depend on it because it'll pull in XCTest, and that crashes in executable then
-            .product(name: "Backtrace", package: "swift-backtrace"),
             .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             .product(name: "Atomics", package: "swift-atomics"),
             .product(name: "OrderedCollections", package: "swift-collections"),
@@ -185,36 +209,36 @@ var targets: [PackageDescription.Target] = [
 ]
 
 var dependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/apple/swift-atomics", from: "1.1.0"),
+    .package(url: "https://github.com/apple/swift-atomics", from: "1.3.0"),
 
-    // .package(url: "https://github.com/apple/swift-cluster-membership", from: "0.3.0"),
-    //    .package(name: "swift-cluster-membership", path: "Packages/swift-cluster-membership"), // FIXME: just work in progress
+    // ~~~ Swift NIO ~~~
+    // FIXME: just work in progress
     .package(url: "https://github.com/apple/swift-cluster-membership", branch: "main"),
 
-    .package(url: "https://github.com/apple/swift-nio", from: "2.61.1"),
-    .package(url: "https://github.com/apple/swift-nio-extras", from: "1.20.0"),
-    .package(url: "https://github.com/apple/swift-nio-ssl", from: "2.25.0"),
+    // ~~~ Swift NIO ~~~
+    .package(url: "https://github.com/apple/swift-nio", from: "2.87.0"),
+    .package(url: "https://github.com/apple/swift-nio-extras", from: "1.29.0"),
+    .package(url: "https://github.com/apple/swift-nio-ssl", from: "2.35.0"),
 
-    .package(url: "https://github.com/apple/swift-protobuf", from: "1.25.1"),
-
-    // ~~~ backtraces ~~~
-    // TODO: optimally, library should not pull swift-backtrace
-    .package(url: "https://github.com/swift-server/swift-backtrace", from: "1.1.1"),
+    .package(url: "https://github.com/apple/swift-protobuf", from: "1.32.0"),
 
     // ~~~ Swift libraries ~~~
-    .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0-beta"),
-    .package(url: "https://github.com/apple/swift-collections", from: "1.1.0"),
+    .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.4"),
+    .package(url: "https://github.com/apple/swift-collections", from: "1.3.0"),
 
     // ~~~ Observability ~~~
-    .package(url: "https://github.com/apple/swift-log", from: "1.0.0"),
     // swift-metrics 1.x and 2.x are almost API compatible, so most clients should use
     .package(url: "https://github.com/apple/swift-metrics", "1.0.0"..<"3.0.0"),
-    .package(url: "https://github.com/apple/swift-service-discovery", from: "1.3.0"),
+    .package(url: "https://github.com/apple/swift-service-discovery", from: "1.4.0"),
 
     // ~~~ SwiftPM Plugins ~~~
 
     // ~~~ Command Line ~~~~
-    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.3"),
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.6.0"),
+
+    // TODO: Probably needs to be removed afterwards?
+    // ~~~ Testing ~~~
+    .package(url: "https://github.com/swiftlang/swift-subprocess", from: "0.2.0"),
 ]
 
 if ProcessInfo.processInfo.environment["VALIDATE_DOCS"] != nil {

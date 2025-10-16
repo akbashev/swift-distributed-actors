@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Atomics
-import Backtrace
 import CDistributedActorsMailbox
 import Dispatch
 @_exported import Distributed

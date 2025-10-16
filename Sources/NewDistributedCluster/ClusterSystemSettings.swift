@@ -14,8 +14,6 @@
 
 import Logging
 import NIO
-import NIOSSL
-import ServiceDiscovery
 
 import class Foundation.ProcessInfo
 

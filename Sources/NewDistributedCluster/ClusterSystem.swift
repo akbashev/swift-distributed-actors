@@ -16,7 +16,6 @@
 import Foundation  // ProcessInfo.processInfo.activeProcessorCount
 import Logging
 import NIO
-import NIOPosix
 import Synchronization
 
 import struct Foundation.Data

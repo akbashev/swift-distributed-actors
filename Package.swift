@@ -51,17 +51,15 @@ var targets: [PackageDescription.Target] = [
         ],
         swiftSettings: [.swiftLanguageMode(.v5)]
     ),
+
+    // MARK: New Cluster
+
     .target(
         name: "NewDistributedCluster",
         dependencies: [
             .product(name: "NIO", package: "swift-nio"),
-            .product(name: "NIOPosix", package: "swift-nio"),
-            .product(name: "NIOFoundationCompat", package: "swift-nio"),
-            .product(name: "NIOSSL", package: "swift-nio-ssl"),
-            .product(name: "NIOExtras", package: "swift-nio-extras"),
-            .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-            .product(name: "Metrics", package: "swift-metrics"),
-            .product(name: "ServiceDiscovery", package: "swift-service-discovery"),
+            .product(name: "NIOCore", package: "swift-nio"),
+            .product(name: "Logging", package: "swift-log"),
         ],
         swiftSettings: [
             //            .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
@@ -106,10 +104,7 @@ var targets: [PackageDescription.Target] = [
 
     .testTarget(
         name: "NewDistributedClusterTests",
-        dependencies: [
-            "NewDistributedCluster",
-            .product(name: "Subprocess", package: "swift-subprocess"),
-        ]
+        dependencies: ["NewDistributedCluster"]
     ),
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: MultiNodeTestKit
@@ -225,6 +220,7 @@ var dependencies: [Package.Dependency] = [
     // ~~~ Swift libraries ~~~
     .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.4"),
     .package(url: "https://github.com/apple/swift-collections", from: "1.3.0"),
+    .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
 
     // ~~~ Observability ~~~
     // swift-metrics 1.x and 2.x are almost API compatible, so most clients should use
@@ -235,10 +231,6 @@ var dependencies: [Package.Dependency] = [
 
     // ~~~ Command Line ~~~~
     .package(url: "https://github.com/apple/swift-argument-parser", from: "1.6.0"),
-
-    // TODO: Probably needs to be removed afterwards?
-    // ~~~ Testing ~~~
-    .package(url: "https://github.com/swiftlang/swift-subprocess", from: "0.2.0"),
 ]
 
 if ProcessInfo.processInfo.environment["VALIDATE_DOCS"] != nil {

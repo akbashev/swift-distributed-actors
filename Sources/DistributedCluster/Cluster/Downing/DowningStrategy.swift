@@ -145,7 +145,7 @@ internal distributed actor DowningStrategyShell {
             self.log.info(
                 "Decide to [.down] member [\(member)]!",
                 metadata: self.metadata([
-                    "downing/node": "\(reflecting: member.node)",
+                    "downing/node": .string("\(reflecting: member.node)"),
                     "member/status/previous": "\(member.status)",
                 ])
             )

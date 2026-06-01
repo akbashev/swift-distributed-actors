@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,11 +14,18 @@
 
 import DistributedActorsTestKit
 import Foundation
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class TerminationWatchTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct TerminationWatchTests {
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
     // MARK: Termination watcher
 
     enum TerminationWatcherMessages {
@@ -38,9 +45,10 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         }
     }
 
+    @Test
     func test_watch_shouldTriggerTerminatedWhenWatchedActorStops() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe()
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe()
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
 
         p.watch(stoppableRef)
 
@@ -54,11 +62,12 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         try p.expectTerminated(stoppableRef)
     }
 
+    @Test
     func test_watchWith_shouldTriggerCustomMessageWhenWatchedActorStops() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe()
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe()
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
 
-        try system._spawn(
+        try self.testCase.system._spawn(
             "watcher",
             of: String.self,
             .setup { context in
@@ -83,11 +92,12 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         // most notably, NOT the `signal:...` message
     }
 
+    @Test
     func test_watchWith_calledMultipleTimesShouldCarryTheLatestMessage() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe()
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe()
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
 
-        try system._spawn(
+        try self.testCase.system._spawn(
             "watcher",
             of: String.self,
             .setup { context in
@@ -114,11 +124,12 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         // most notably, NOT the `signal:...` message
     }
 
+    @Test
     func test_watchWith_calledMultipleTimesShouldAllowGettingBackToSignalDelivery() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe()
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe()
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz0", self.stopOnAnyMessage(probe: p.ref))
 
-        try system._spawn(
+        try self.testCase.system._spawn(
             "watcher",
             of: String.self,
             .setup { context in
@@ -145,12 +156,13 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         // most notably, NOT the `signal:...` message
     }
 
+    @Test
     func test_watch_fromMultipleActors_shouldTriggerTerminatedWhenWatchedActorStops() throws {
-        let p = self.testKit.makeTestProbe("p", expecting: String.self)
-        let p1 = self.testKit.makeTestProbe("p1", expecting: String.self)
-        let p2 = self.testKit.makeTestProbe("p2", expecting: String.self)
+        let p = self.testCase.testKit.makeTestProbe("p", expecting: String.self)
+        let p1 = self.testCase.testKit.makeTestProbe("p1", expecting: String.self)
+        let p2 = self.testCase.testKit.makeTestProbe("p2", expecting: String.self)
 
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz1", self.stopOnAnyMessage(probe: p.ref))
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz1", self.stopOnAnyMessage(probe: p.ref))
 
         p1.watch(stoppableRef)
         p2.watch(stoppableRef)
@@ -170,19 +182,20 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         _Thread.sleep(.milliseconds(1000))
     }
 
+    @Test
     func test_watch_fromMultipleActors_shouldNotifyOfTerminationOnlyCurrentWatchers() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe("p")
-        let p1: ActorTestProbe<String> = self.testKit.makeTestProbe("p1")
-        let p2: ActorTestProbe<String> = self.testKit.makeTestProbe("p2")
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("p")
+        let p1: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("p1")
+        let p2: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("p2")
 
         // p3 will not watch by itself, but serve as our observer for what our in-line defined watcher observes
-        let p3_partnerOfNotActuallyWatching: ActorTestProbe<String> = self.testKit.makeTestProbe("p3-not-really")
+        let p3_partnerOfNotActuallyWatching: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("p3-not-really")
 
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz2", self.stopOnAnyMessage(probe: p.ref))
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz2", self.stopOnAnyMessage(probe: p.ref))
 
         p1.watch(stoppableRef)
         p2.watch(stoppableRef)
-        let notActuallyWatching: _ActorRef<String> = try system._spawn(
+        let notActuallyWatching: _ActorRef<String> = try self.testCase.system._spawn(
             "notActuallyWatching",
             .setup { context in
                 context.watch(stoppableRef)  // watching...
@@ -217,17 +230,18 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         try p3_partnerOfNotActuallyWatching.expectNoMessage(for: .milliseconds(1000))  // make su
     }
 
+    @Test
     func test_minimized_terminationContract_shouldTriggerForWatchedActor() throws {
-        let probe = self.testKit.makeTestProbe("pp", expecting: String.self)
+        let probe = self.testCase.testKit.makeTestProbe("pp", expecting: String.self)
 
-        let juliet = try system._spawn(
+        let juliet = try self.testCase.system._spawn(
             "juliet",
             _Behavior<String>.receiveMessage { _ in
                 .same
             }
         )
 
-        let romeo = try system._spawn(
+        let romeo = try self.testCase.system._spawn(
             "romeo",
             _Behavior<String>.setup { context in
                 context.watch(juliet)
@@ -252,6 +266,7 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         try probe.expectTerminated(romeo)
     }
 
+    @Test
     func test_minimized_terminationContract_shouldNotTriggerForActorThatWasWatchedButIsNotAnymoreWhenTerminatedArrives() throws {
         // Tests a very specific situation where romeo watches juliet, juliet terminates and sends .terminated
         // yet during that time, romeo unwatches her. This means that the .terminated message could arrive at
@@ -261,16 +276,16 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         // The .terminated message should also NOT be delivered to the .receiveSignal handler, it should be as if the watcher
         // never watched juliet to begin with. (This also is important so Swift Distributed Actors semantics are the same as what users would manually be able to to)
 
-        let probe = self.testKit.makeTestProbe("pp", expecting: String.self)
+        let probe = self.testCase.testKit.makeTestProbe("pp", expecting: String.self)
 
-        let juliet = try system._spawn(
+        let juliet = try self.testCase.system._spawn(
             "juliet",
             _Behavior<String>.receiveMessage { _ in
                 .same
             }
         )
 
-        let romeo = try system._spawn(
+        let romeo = try self.testCase.system._spawn(
             "romeo",
             _Behavior<String>.receive { context, message in
                 switch message {
@@ -308,16 +323,17 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         try probe.expectNoMessage(for: .milliseconds(100))
     }
 
+    @Test
     func test_watch_anAlreadyStoppedActorRefShouldReplyWithTerminated() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe("alreadyDeadWatcherProbe")
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("alreadyDeadWatcherProbe")
 
-        let alreadyDead: _ActorRef<String> = try system._spawn("alreadyDead", .stop)
+        let alreadyDead: _ActorRef<String> = try self.testCase.system._spawn("alreadyDead", .stop)
 
         p.watch(alreadyDead)
         try p.expectTerminated(alreadyDead)
 
         // even if a new actor comes in and performs the watch, it also should notice that `alreadyDead` is dead
-        let p2: ActorTestProbe<String> = self.testKit.makeTestProbe("alreadyDeadWatcherProbe2")
+        let p2: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("alreadyDeadWatcherProbe2")
         p2.watch(alreadyDead)
         try p2.expectTerminated(alreadyDead)
 
@@ -327,8 +343,9 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
 
     // MARK: Death pact
 
+    @Test
     func test_terminationContract_shouldMakeWatcherKillItselfWhenWatcheeStops() throws {
-        let romeo = try system._spawn(
+        let romeo = try self.testCase.system._spawn(
             "romeo",
             _Behavior<RomeoMessage>.receive { context, message in
                 switch message {
@@ -340,7 +357,7 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
             }  // NOT handling signal on purpose, we are in a Death Pact
         )
 
-        let juliet = try system._spawn(
+        let juliet = try self.testCase.system._spawn(
             "juliet",
             _Behavior<JulietMessage>.receiveMessage { message in
                 switch message {
@@ -350,7 +367,7 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
             }
         )
 
-        let p = self.testKit.makeTestProbe("p", expecting: Done.self)
+        let p = self.testCase.testKit.makeTestProbe("p", expecting: Done.self)
 
         p.watch(juliet)
         p.watch(romeo)
@@ -363,8 +380,9 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
         try p.expectTerminatedInAnyOrder([juliet.asAddressable, romeo.asAddressable])
     }
 
+    @Test
     func test_terminationContract_shouldMakeWatcherKillItselfWhenWatcheeThrows() throws {
-        let romeo = try system._spawn(
+        let romeo = try self.testCase.system._spawn(
             "romeo",
             _Behavior<RomeoMessage>.receive { context, message in
                 switch message {
@@ -376,7 +394,7 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
             }  // NOT handling signal on purpose, we are in a Death Pact
         )
 
-        let juliet = try system._spawn(
+        let juliet = try self.testCase.system._spawn(
             "juliet",
             _Behavior<JulietMessage>.receiveMessage { message in
                 switch message {
@@ -386,7 +404,7 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
             }
         )
 
-        let p = self.testKit.makeTestProbe("p", expecting: Done.self)
+        let p = self.testCase.testKit.makeTestProbe("p", expecting: Done.self)
 
         p.watch(juliet)
         p.watch(romeo)
@@ -404,9 +422,10 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: Watching child actors
 
+    @Test
     func test_ensureOnlySingleTerminatedSignal_emittedByWatchedChildDies() throws {
-        let p: ActorTestProbe<_Signals.Terminated> = self.testKit.makeTestProbe()
-        let pp: ActorTestProbe<String> = self.testKit.makeTestProbe()
+        let p: ActorTestProbe<_Signals.Terminated> = self.testCase.testKit.makeTestProbe()
+        let pp: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe()
 
         let spawnSomeStoppers = _Behavior<String>.setup { context in
             let one: _ActorRef<String> = try context._spawnWatch(
@@ -429,7 +448,7 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
             return .same  // ignore the child termination, remain alive
         }
 
-        let _: _ActorRef<String> = try system._spawn("parent", spawnSomeStoppers)
+        let _: _ActorRef<String> = try self.testCase.system._spawn("parent", spawnSomeStoppers)
 
         let terminated = try p.expectMessage()
         terminated.id.path.shouldEqual(try! ActorPath._user.appending("parent").appending("stopper"))
@@ -450,9 +469,10 @@ final class TerminationWatchTests: SingleClusterSystemXCTestCase {
     //        try p.expectTerminated(system.deadLetters)
     //    }
 
+    @Test
     func test_sendingToStoppedRef_shouldNotCrash() throws {
-        let p: ActorTestProbe<String> = self.testKit.makeTestProbe()
-        let stoppableRef: _ActorRef<StoppableRefMessage> = try system._spawn("stopMePlz2", self.stopOnAnyMessage(probe: p.ref))
+        let p: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe()
+        let stoppableRef: _ActorRef<StoppableRefMessage> = try self.testCase.system._spawn("stopMePlz2", self.stopOnAnyMessage(probe: p.ref))
 
         p.watch(stoppableRef)
 

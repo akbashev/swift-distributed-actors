@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -17,6 +17,9 @@ import DistributedCluster
 import Foundation
 import NIO
 import NIOFoundationCompat
+import Testing
+
+@testable import DistributedCluster
 
 // end::serialize_manifest_any[]
 
@@ -135,16 +138,16 @@ enum CustomlyEncodedMessage: Codable, _NotActuallyCodableMessage {
 }
 
 // end::serialization_custom_messages[]
-
-class SerializationDocExamples {
+@Suite(.disabled("Documentation examples"), .serialized)
+struct SerializationDocExamples {
     lazy var system: ClusterSystem = _undefined(hint: "Examples, not intended to be run")
 
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: Serialized Codable messages
 
-    func prepare_system_codable() throws {
+    func prepare_system_codable() async throws {
         // tag::prepare_system_codable[]
-        let system = ClusterSystem("CodableExample") { settings in
+        let system = await ClusterSystem("CodableExample") { settings in
             settings.serialization.register(ParkingSpotStatus.self)
         }
         // end::prepare_system_codable[]
@@ -167,9 +170,9 @@ class SerializationDocExamples {
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: Serialized protobuf messages
 
-    func prepare_system_protobuf() throws {
+    func prepare_system_protobuf() async throws {
         // tag::prepare_system_protobuf[]
-        let system = ClusterSystem("ProtobufExample") { settings in
+        let system = await ClusterSystem("ProtobufExample") { settings in
             settings.serialization.register(ParkingGarageStatus.self)
         }
         // end::prepare_system_protobuf[]
@@ -192,9 +195,9 @@ class SerializationDocExamples {
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: Serialized custom messages
 
-    func prepare_system_custom() throws {
+    func prepare_system_custom() async throws {
         // tag::prepare_system_custom[]
-        let system = ClusterSystem("CustomSerializerExample") { settings in
+        let system = await ClusterSystem("CustomSerializerExample") { settings in
             settings.serialization.registerSpecializedSerializer(CustomlyEncodedMessage.self, serializerID: 1001) { allocator in
                 CustomlyEncodedSerializer(allocator)
             }
@@ -203,9 +206,9 @@ class SerializationDocExamples {
         _ = system  // silence not-used warnings
     }
 
-    func serialization_specific_coder() throws {
+    func serialization_specific_coder() async throws {
         // tag::serialization_specific_coder[]
-        let system = ClusterSystem("CustomizeCoderExample") { settings in
+        let system = await ClusterSystem("CustomizeCoderExample") { settings in
             settings.serialization.register(MyMessage.self, serializerID: .foundationJSON)
         }
         // end::serialization_specific_coder[]
@@ -214,9 +217,9 @@ class SerializationDocExamples {
 
     struct MyMessage: Codable {}
     struct OtherGenericMessage<M: Codable>: Codable {}
-    func serialization_register_types() throws {
+    func serialization_register_types() async throws {
         // tag::serialization_register_types[]
-        let system = ClusterSystem("RegisteringTypes") { settings in
+        let system = await ClusterSystem("RegisteringTypes") { settings in
             // settings.serialization.insecureSerializeNotRegisteredMessages = false (default in RELEASE mode)
             settings.serialization.register(MyMessage.self)
             settings.serialization.register(OtherGenericMessage<Int>.self)
@@ -330,7 +333,7 @@ struct DistributedAlgorithmExampleEnvelope<Payload: ForSomeReasonNotCodable>: Co
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         guard let context = decoder.actorSerializationContext else {
-            throw SerializationError(.missingSerializationContext(decoder, Self.self))
+            throw SerializationError.missingSerializationContext(decoder, Self.self)
         }
 
         let manifest = try container.decode(Serialization.Manifest.self, forKey: .payloadManifest)
@@ -357,7 +360,7 @@ struct DistributedAlgorithmExampleEnvelope<Payload: ForSomeReasonNotCodable>: Co
 
     func encode(to encoder: Encoder) throws {
         guard let context = encoder.actorSerializationContext else {
-            throw SerializationError(.missingSerializationContext(encoder, self))
+            throw SerializationError.missingSerializationContext(encoder, self)
         }
 
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -371,6 +374,8 @@ struct DistributedAlgorithmExampleEnvelope<Payload: ForSomeReasonNotCodable>: Co
             data = d
         case .nioByteBuffer(let buffer):
             data = buffer.getData(at: 0, length: buffer.readableBytes)!  // !-safe, we know the range from 0-readableBytes is correct
+        @unknown default:
+            fatalError("unknown buffer type")
         }
         try container.encode(data, forKey: .payload)
 

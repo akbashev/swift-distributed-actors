@@ -86,6 +86,24 @@ var targets: [PackageDescription.Target] = [
         swiftSettings: [.swiftLanguageMode(.v5)]
     ),
 
+    .testTarget(
+        name: "CDistributedActorsMailboxTests",
+        dependencies: [
+            "CDistributedActorsMailbox"
+        ],
+        swiftSettings: [.swiftLanguageMode(.v5)]
+    ),
+
+    .testTarget(
+        name: "DistributedActorsDocumentationTests",
+        dependencies: [
+            "DistributedCluster",
+            "DistributedActorsTestKit",
+            .product(name: "NIO", package: "swift-nio"),
+        ],
+        swiftSettings: [.swiftLanguageMode(.v5)]
+    ),
+
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: MultiNodeTestKit
 

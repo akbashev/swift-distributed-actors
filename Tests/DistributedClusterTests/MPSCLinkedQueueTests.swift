@@ -6,30 +6,33 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-class MPSCLinkedQueueTests: XCTestCase {
+struct MPSCLinkedQueueTests {
+    @Test
     func test_dequeueWhenEmpty() {
         let q = MPSCLinkedQueue<Int>()
 
-        XCTAssertNil(q.dequeue())
+        #expect(q.dequeue() == nil)
     }
 
+    @Test
     func test_enqueueDequeue() {
         let q = MPSCLinkedQueue<Int>()
         q.enqueue(1)
 
-        XCTAssertEqual(1, q.dequeue()!)
+        #expect(q.dequeue()! == 1)
     }
 
+    @Test
     func test_concurrentEnqueueDequeue() throws {
         let writerCount = 6
         let messageCountPerWriter = 10000

@@ -6,18 +6,27 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Foundation
+import Testing
 
 @testable import DistributedCluster
 
-final class ActorIDTests: ClusteredActorSystemsXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct ActorIDTests {
+    let testCase: ClusteredActorSystemsTestCase
+
+    init() throws {
+        self.testCase = try ClusteredActorSystemsTestCase()
+    }
+
+    @Test
     func test_local_actorAddress_shouldPrintNicely() throws {
         let node = Cluster.Node(systemName: "\(Self.self)", host: "127.0.0.1", port: 7337, nid: .random())
         let id = try ActorID(local: node, path: ActorPath._user.appending("hello"), incarnation: ActorIncarnation(8888))
@@ -37,6 +46,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         String(reflecting: id.path.name).shouldEqual("\"hello\"")
     }
 
+    @Test
     func test_remote_actorAddress_shouldPrintNicely() throws {
         let localNode = Cluster.Node(systemName: "\(Self.self)", host: "127.0.0.1", port: 7337, nid: .random())
         let id = try ActorID(local: localNode, path: ActorPath._user.appending("hello"), incarnation: ActorIncarnation(8888))
@@ -55,7 +65,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Equality & Sorting
-
+    @Test
     func test_equalityOf_idWithSameSegmentsButDifferentIncarnation() throws {
         let node = Cluster.Node(systemName: "\(Self.self)", host: "127.0.0.1", port: 7337, nid: .random())
         let one = try ActorPath(root: "test").makeChildPath(name: "foo").makeLocalID(on: node, incarnation: .random())
@@ -68,6 +78,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         one.path.shouldEqual(two.path)
     }
 
+    @Test
     func test_equalityOf_idWithDifferentSystemNameOnly() throws {
         let path = try ActorPath._user.appending("hello")
         let one = ActorID(local: Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111)), path: path, incarnation: ActorIncarnation(88))
@@ -76,6 +87,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         one.shouldEqual(two)
     }
 
+    @Test
     func test_equalityOf_idWithDifferentSystemNameOnly_remote() throws {
         let path = try ActorPath._user.appending("hello")
         let one = ActorID(remote: Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111)), path: path, incarnation: ActorIncarnation(88))
@@ -84,6 +96,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         one.shouldEqual(two)
     }
 
+    @Test
     func test_equalityOf_idWithDifferentSystemNameOnly_local_remote() throws {
         let path = try ActorPath._user.appending("hello")
         let one = ActorID(local: Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111)), path: path, incarnation: ActorIncarnation(88))
@@ -92,6 +105,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         one.shouldEqual(two)
     }
 
+    @Test
     func test_equalityOf_idWithDifferentSegmentsButSameUID() throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         let one = try ActorPath(root: "test").makeChildPath(name: "foo").makeLocalID(on: node, incarnation: .random())
@@ -100,6 +114,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         one.shouldNotEqual(one2)
     }
 
+    @Test
     func test_sortingOf_actorIDs() throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         var ids: [ActorID] = []
@@ -114,6 +129,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         ids.sorted().shouldEqual([a, b, c])
     }
 
+    @Test
     func test_sortingOf_sameNode_actorIDs() throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         var ids: [ActorID] = []
@@ -128,6 +144,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         ids.sorted().shouldEqual([a, b, c])
     }
 
+    @Test
     func test_sortingOf_diffNodes_actorIDs() throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         var ids: [ActorID] = []
@@ -144,7 +161,7 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
 
     // ==== -----------------------------------------------------------------------------------------------------------
     // MARK: Coding
-
+    @Test
     func test_encodeDecode_ActorAddress_withoutSerializationContext() async throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         let a = try ActorPath._user.appending("a").makeRemoteID(on: node, incarnation: 1)
@@ -163,12 +180,13 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         back.shouldEqual(addressWithoutTestTag)
     }
 
+    @Test
     func test_serializing_ActorAddress_skipCustomTag() async throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         let a = try ActorPath._user.appending("a").makeRemoteID(on: node, incarnation: 1)
         a.metadata.test = "test-value"
 
-        let system = await self.setUpNode("test_serializing_ActorAddress_skipCustomTag") { settings in
+        let system = await self.testCase.setUpNode("test_serializing_ActorAddress_skipCustomTag") { settings in
             settings.bindPort = 1234
         }
 
@@ -182,12 +200,13 @@ final class ActorIDTests: ClusteredActorSystemsXCTestCase {
         serializedJson.shouldNotContain(#"$test":"test-value""#)
     }
 
+    @Test
     func test_serializing_ActorAddress_propagateCustomTag() async throws {
         let node = Cluster.Node(systemName: "one", host: "127.0.0.1", port: 1234, nid: Cluster.Node.ID(11111))
         let a = try ActorPath._user.appending("a").makeRemoteID(on: node, incarnation: 1)
         a.metadata.test = "test-value"
 
-        let system = await self.setUpNode("test_serializing_ActorAddress_propagateCustomTag") { settings in
+        let system = await self.testCase.setUpNode("test_serializing_ActorAddress_propagateCustomTag") { settings in
             settings.bindPort = 1234
             settings.actorMetadata.encodeCustomMetadata = { metadata, container in
                 try container.encodeIfPresent(metadata.test, forKey: ActorCoding.MetadataKeys.custom(ActorMetadataKeys.__instance.test.id))

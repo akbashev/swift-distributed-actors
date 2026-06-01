@@ -164,6 +164,17 @@ func pinfo(_ message: String, file: StaticString = #fileID, line: UInt = #line) 
     )
 }
 
+func pinfo(_ message: String, file: String, line: Int) {
+    print(
+        """
+        \(CONSOLE_GREEN)\
+        [\(_createTimeFormatter().string(from: Date()))] \
+        \(file):\(line) : \(message)\
+        \(CONSOLE_RESET)
+        """
+    )
+}
+
 internal func _hackyPThreadThreadId() -> String {
     #if os(macOS)
     var threadId: UInt64 = 0

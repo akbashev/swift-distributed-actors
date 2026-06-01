@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,7 +14,7 @@
 
 import Distributed
 import DistributedCluster
-import XCTest
+import Testing
 
 public nonisolated func assertRemoteActor<DA: DistributedActor>(_ actor: DA) throws {
     if __isRemoteActor(actor) {

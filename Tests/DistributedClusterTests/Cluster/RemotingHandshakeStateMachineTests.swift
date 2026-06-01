@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -16,18 +16,18 @@ import DistributedActorsTestKit
 import Foundation
 import Logging
 import NIO
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class RemoteHandshakeStateMachineTests: XCTestCase {
+struct RemoteHandshakeStateMachineTests {
     typealias HSM = HandshakeStateMachine
 
     let systemName = "RemoteHandshakeStateMachineTests"
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Happy path handshakes
-
+    @Test
     func test_handshake_happyPath() throws {
         let serverKernel = ClusterShellState.makeTestMock(side: .server)
         let serverAddress = serverKernel.selfNode
@@ -65,7 +65,7 @@ final class RemoteHandshakeStateMachineTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Version negotiation
-
+    @Test
     func test_negotiate_server_shouldAcceptClient_newerPatch() throws {
         let serverKernel = ClusterShellState.makeTestMock(side: .server)
         let serverAddress = serverKernel.selfNode
@@ -91,6 +91,7 @@ final class RemoteHandshakeStateMachineTests: XCTestCase {
         }
     }
 
+    @Test
     func test_negotiate_server_shouldRejectClient_newerMajor() throws {
         let serverKernel = ClusterShellState.makeTestMock(side: .server)
         let serverAddress = serverKernel.selfNode
@@ -121,7 +122,7 @@ final class RemoteHandshakeStateMachineTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Handshake timeout causing retries
-
+    @Test
     func test_onTimeout_shouldReturnNewHandshakeOffersMultipleTimes() throws {
         let serverKernel = ClusterShellState.makeTestMock(side: .server)
         let serverAddress = serverKernel.selfNode

@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,32 +14,38 @@
 
 // tag::imports[]
 
+import Dispatch
 import DistributedCluster
+import Logging
 import ServiceDiscovery
-import XCTest
+import Testing
 
 @testable import DistributedActorsTestKit
+@testable import DistributedCluster
 
 // end::imports[]
 
-class ClusterDocExamples: XCTestCase {
-    func example_receive_behavior() throws {
+@Suite(.disabled("Documentation examples"), .serialized)
+struct ClusterDocExamples {
+    @Test
+    func example_receive_behavior() async throws {
         // tag::joining[]
-        let system = ClusterSystem("ClusterJoining") { settings in
+        let system = try await ClusterSystem("ClusterJoining") { settings in
             settings.enabled = true  // <1>
             // system will bind by default on `localhost:7337`
         }
 
-        let otherNode = Endpoint(systemName: "ClusterJoining", host: "localhost", port: 8228)
+        let otherNode = Cluster.Endpoint(systemName: "ClusterJoining", host: "localhost", port: 8228)
         system.cluster.join(endpoint: otherNode)  // <2>
 
         // end::joining[]
     }
 
-    func example_discovery_joining_seedNodes() {
+    @Test
+    func example_discovery_joining_seedNodes() async {
         class SomeSpecificServiceDiscovery: ServiceDiscovery {
             typealias Service = String
-            typealias Instance = Endpoint
+            typealias Instance = Cluster.Endpoint
 
             private(set) var defaultLookupTimeout: DispatchTimeInterval = .seconds(3)
 
@@ -53,9 +59,9 @@ class ClusterDocExamples: XCTestCase {
         }
 
         // tag::discovery-joining-config[]
-        let system = ClusterSystem("DiscoveryJoining") { settings in
+        let system = try! await ClusterSystem("DiscoveryJoining") { settings in
             settings.discovery = ServiceDiscoverySettings(
-                SomeSpecificServiceDiscovery(),  // pass in the configuration
+                SomeSpecificServiceDiscovery( /* configuration */),
                 service: "my-service"  // `Service` type aligned with what SomeSpecificServiceDiscovery expects
             )
         }
@@ -63,7 +69,8 @@ class ClusterDocExamples: XCTestCase {
         _ = system
     }
 
-    func example_discovery_joining_seedNodes_2() {
+    @Test
+    func example_discovery_joining_seedNodes_2() async {
         struct SomeGenericNode: Hashable {
             let host: String
             let port: Int
@@ -83,12 +90,12 @@ class ClusterDocExamples: XCTestCase {
             }
         }
         // tag::discovery-joining-config-2[]
-        let system = ClusterSystem("DiscoveryJoining") { settings in
+        let system = try! await ClusterSystem("DiscoveryJoining") { settings in
             settings.discovery = ServiceDiscoverySettings(
-                SomeGenericServiceDiscovery(),  // <1>
+                SomeGenericServiceDiscovery( /* configuration */),  // <1>
                 service: "my-service",
-                mapInstanceToNode: { (instance: SomeGenericServiceDiscovery.Instance) -> Endpoint in  // <2>
-                    Endpoint(systemName: "", host: instance.host, port: instance.port)
+                mapInstanceToNode: { (instance: SomeGenericServiceDiscovery.Instance) -> Cluster.Endpoint in  // <2>
+                    Cluster.Endpoint(systemName: "", host: instance.host, port: instance.port)
                 }
             )
         }
@@ -96,8 +103,9 @@ class ClusterDocExamples: XCTestCase {
         _ = system
     }
 
-    func example_subscribe_events_apply() throws {
-        let system = ClusterSystem("Sample")
+    @Test
+    func example_subscribe_events_apply() async throws {
+        let system = try await ClusterSystem("Sample")
 
         try system._spawn(
             .anonymous,
@@ -118,7 +126,7 @@ class ClusterDocExamples: XCTestCase {
         )
 
         // tag::membership-snapshot[]
-        let snapshot: Cluster.Membership = system.cluster.membershipSnapshot
+        let snapshot: Cluster.Membership = await system.cluster.membershipSnapshot
         // end::membership-snapshot[]
         _ = snapshot  // silence not-used warning
     }

@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,23 +14,32 @@
 
 import DistributedActorsTestKit
 import Logging
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTestCase {
-    override func configureLogCapture(settings: inout LogCapture.Settings) {
-        settings.excludeActorPaths = [
-            "/system/cluster/swim",
-            "/system/cluster/gossip",
-            "/system/replicator",
-            "/system/cluster",
-            "/system/clusterEvents",
-            "/system/cluster/leadership",
-        ]
-        settings.excludeGrep = [
-            "timer"
-        ]
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct _OpLogClusterReceptionistClusteredTests {
+    let testCase: ClusteredActorSystemsTestCase
+
+    init() throws {
+        self.testCase = try ClusteredActorSystemsTestCase()
+        self.testCase.configureLogCapture = { settings in
+            settings.excludeActorPaths = [
+                "/system/cluster/swim",
+                "/system/cluster/gossip",
+                "/system/replicator",
+                "/system/cluster",
+                "/system/clusterEvents",
+                "/system/cluster/leadership",
+            ]
+            settings.excludeGrep = [
+                "timer"
+            ]
+        }
+        self.testCase.configureActorSystem = { settings in
+            settings.receptionist.ackPullReplicationIntervalSlow = .milliseconds(300)
+        }
     }
 
     let stopOnMessage: _Behavior<String> = .receive { context, _ in
@@ -38,17 +47,13 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         return .stop
     }
 
-    override func configureActorSystem(settings: inout ClusterSystemSettings) {
-        settings.receptionist.ackPullReplicationIntervalSlow = .milliseconds(300)
-    }
-
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Sync
-
+    @Test
     func test_shouldReplicateRegistrations() async throws {
-        let (local, remote) = await setUpPair()
-        let testKit: ActorTestKit = self.testKit(local)
-        try await self.joinNodes(node: local, with: remote)
+        let (local, remote) = await self.testCase.setUpPair()
+        let testKit: ActorTestKit = self.testCase.testKit(local)
+        try await self.testCase.joinNodes(node: local, with: remote)
 
         let probe = testKit.makeTestProbe(expecting: String.self)
         let registeredProbe = testKit.makeTestProbe("registered", expecting: _Reception.Registered<_ActorRef<String>>.self)
@@ -82,14 +87,15 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         try probe.expectMessage("received:test")
     }
 
+    @Test
     func test_shouldSyncPeriodically() async throws {
-        let (local, remote) = await setUpPair {
+        let (local, remote) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .seconds(1)
         }
 
-        let probe = self.testKit(local).makeTestProbe(expecting: String.self)
-        let registeredProbe = self.testKit(local).makeTestProbe(expecting: _Reception.Registered<_ActorRef<String>>.self)
-        let lookupProbe = self.testKit(local).makeTestProbe(expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let probe = self.testCase.testKit(local).makeTestProbe(expecting: String.self)
+        let registeredProbe = self.testCase.testKit(local).makeTestProbe(expecting: _Reception.Registered<_ActorRef<String>>.self)
+        let lookupProbe = self.testCase.testKit(local).makeTestProbe(expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         let ref: _ActorRef<String> = try local._spawn(
             .anonymous,
@@ -109,7 +115,7 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         _ = try registeredProbe.expectMessage()
 
         local.cluster.join(endpoint: remote.cluster.node.endpoint)
-        try assertAssociated(local, withExactly: remote.settings.bindNode)
+        try self.testCase.assertAssociated(local, withExactly: remote.settings.bindNode)
 
         let listing = try lookupProbe.expectMessage()
         listing.refs.count.shouldEqual(1)
@@ -121,14 +127,15 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         try probe.expectMessage("received:test")
     }
 
+    @Test
     func test_shouldMergeEntriesOnSync() async throws {
-        let (local, remote) = await setUpPair {
+        let (local, remote) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .seconds(1)
         }
 
-        let registeredProbe = self.testKit(local).makeTestProbe("registeredProbe", expecting: _Reception.Registered<_ActorRef<String>>.self)
-        let localLookupProbe = self.testKit(local).makeTestProbe("localLookupProbe", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let remoteLookupProbe = self.testKit(remote).makeTestProbe("remoteLookupProbe", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let registeredProbe = self.testCase.testKit(local).makeTestProbe("registeredProbe", expecting: _Reception.Registered<_ActorRef<String>>.self)
+        let localLookupProbe = self.testCase.testKit(local).makeTestProbe("localLookupProbe", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let remoteLookupProbe = self.testCase.testKit(remote).makeTestProbe("remoteLookupProbe", expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         let behavior: _Behavior<String> = .receiveMessage { _ in
             .same
@@ -160,7 +167,7 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         _ = try remoteLookupProbe.expectMessage()
 
         local.cluster.join(endpoint: remote.cluster.node.endpoint)
-        try assertAssociated(local, withExactly: remote.settings.bindNode)
+        try self.testCase.assertAssociated(local, withExactly: remote.settings.bindNode)
 
         let localListing = try localLookupProbe.expectMessage()
         localListing.refs.count.shouldEqual(4)
@@ -178,12 +185,12 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
     }
 
     func shared_clusterReceptionist_shouldRemoveRemoteRefsStop(killActors: KillActorsMode) async throws {
-        let (first, second) = await setUpPair {
+        let (first, second) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .seconds(1)
         }
 
-        let registeredProbe = self.testKit(first).makeTestProbe(expecting: _Reception.Registered<_ActorRef<String>>.self)
-        let remoteLookupProbe = self.testKit(second).makeTestProbe(expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let registeredProbe = self.testCase.testKit(first).makeTestProbe(expecting: _Reception.Registered<_ActorRef<String>>.self)
+        let remoteLookupProbe = self.testCase.testKit(second).makeTestProbe(expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         let refA: _ActorRef<String> = try first._spawn(.anonymous, self.stopOnMessage)
         let refB: _ActorRef<String> = try first._spawn(.anonymous, self.stopOnMessage)
@@ -200,7 +207,7 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         _ = try remoteLookupProbe.expectMessage()
 
         first.cluster.join(endpoint: second.cluster.node.endpoint)
-        try assertAssociated(first, withExactly: second.settings.bindNode)
+        try self.testCase.assertAssociated(first, withExactly: second.settings.bindNode)
 
         try remoteLookupProbe.eventuallyExpectListing(expected: [refA, refB], within: .seconds(3))
 
@@ -215,20 +222,23 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         try remoteLookupProbe.eventuallyExpectListing(expected: [], within: .seconds(3))
     }
 
+    @Test
     func test_clusterReceptionist_shouldRemoveRemoteRefs_whenTheyStop() async throws {
         try await self.shared_clusterReceptionist_shouldRemoveRemoteRefsStop(killActors: .sendStop)
     }
 
+    @Test
     func test_clusterReceptionist_shouldRemoveRemoteRefs_whenNodeDies() async throws {
         try await self.shared_clusterReceptionist_shouldRemoveRemoteRefsStop(killActors: .shutdownNode)
     }
 
+    @Test
     func test_clusterReceptionist_shouldRemoveRefFromAllListingsItWasRegisteredWith_ifTerminates() async throws {
-        let (first, second) = await setUpPair {
+        let (first, second) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .milliseconds(200)
         }
         first.cluster.join(endpoint: second.cluster.node.endpoint)
-        try assertAssociated(first, withExactly: second.settings.bindNode)
+        try self.testCase.assertAssociated(first, withExactly: second.settings.bindNode)
 
         let firstKey = _Reception.Key(_ActorRef<String>.self, id: "first")
         let extraKey = _Reception.Key(_ActorRef<String>.self, id: "extra")
@@ -237,10 +247,10 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         first._receptionist.register(ref, with: firstKey)
         first._receptionist.register(ref, with: extraKey)
 
-        let p1f = self.testKit(first).makeTestProbe("p1f", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let p1e = self.testKit(first).makeTestProbe("p1e", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let p2f = self.testKit(second).makeTestProbe("p2f", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let p2e = self.testKit(second).makeTestProbe("p2e", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p1f = self.testCase.testKit(first).makeTestProbe("p1f", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p1e = self.testCase.testKit(first).makeTestProbe("p1e", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p2f = self.testCase.testKit(second).makeTestProbe("p2f", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p2e = self.testCase.testKit(second).makeTestProbe("p2e", expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         // ensure the ref is registered and known under both keys to both nodes
         first._receptionist.subscribe(p1f.ref, to: firstKey)
@@ -266,12 +276,13 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         try expectListingOnAllProbes(expected: [])
     }
 
+    @Test
     func test_clusterReceptionist_shouldRemoveActorsOfTerminatedNodeFromListings_onNodeCrash() async throws {
-        let (first, second) = await setUpPair {
+        let (first, second) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .milliseconds(200)
         }
         first.cluster.join(endpoint: second.cluster.node.endpoint)
-        try assertAssociated(first, withExactly: second.settings.bindNode)
+        try self.testCase.assertAssociated(first, withExactly: second.settings.bindNode)
 
         let key = _Reception.Key(_ActorRef<String>.self, id: "key")
 
@@ -281,8 +292,8 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         let secondRef = try second._spawn("onSecond", self.stopOnMessage)
         second._receptionist.register(secondRef, with: key)
 
-        let p1 = self.testKit(first).makeTestProbe("p1", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let p2 = self.testKit(second).makeTestProbe("p2", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p1 = self.testCase.testKit(first).makeTestProbe("p1", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p2 = self.testCase.testKit(second).makeTestProbe("p2", expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         // ensure the ref is registered and known under both keys to both nodes
         first._receptionist.subscribe(p1.ref, to: key)
@@ -298,12 +309,13 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         try p1.eventuallyExpectListing(expected: [firstRef], within: .seconds(5))
     }
 
+    @Test
     func test_clusterReceptionist_shouldRemoveManyRemoteActorsFromListingInBulk() async throws {
-        let (first, second) = await setUpPair {
+        let (first, second) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .milliseconds(200)
         }
         first.cluster.join(endpoint: second.cluster.node.endpoint)
-        try assertAssociated(first, withExactly: second.settings.bindNode)
+        try self.testCase.assertAssociated(first, withExactly: second.settings.bindNode)
 
         let key = _Reception.Key(_ActorRef<String>.self, id: "key")
 
@@ -316,8 +328,8 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
             return ref
         }
 
-        let p1 = self.testKit(first).makeTestProbe("p1", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let p2 = self.testKit(second).makeTestProbe("p2", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p1 = self.testCase.testKit(first).makeTestProbe("p1", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p2 = self.testCase.testKit(second).makeTestProbe("p2", expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         // ensure the ref is registered and known under both keys to both nodes
         first._receptionist.subscribe(p1.ref, to: key)
@@ -337,13 +349,13 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Multi node / streaming
-
+    @Test
     func test_clusterReceptionist_shouldStreamAllRegisteredActorsInChunks() async throws {
-        let (first, second) = await setUpPair {
+        let (first, second) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .milliseconds(200)
         }
         first.cluster.join(endpoint: second.cluster.node.endpoint)
-        try assertAssociated(first, withExactly: second.settings.bindNode)
+        try self.testCase.assertAssociated(first, withExactly: second.settings.bindNode)
 
         let key = _Reception.Key(_ActorRef<String>.self, id: "first")
 
@@ -354,8 +366,8 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
             _ = allRefs.insert(ref)
         }
 
-        let p1 = self.testKit(first).makeTestProbe("p1", expecting: _Reception.Listing<_ActorRef<String>>.self)
-        let p2 = self.testKit(second).makeTestProbe("p2", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p1 = self.testCase.testKit(first).makeTestProbe("p1", expecting: _Reception.Listing<_ActorRef<String>>.self)
+        let p2 = self.testCase.testKit(second).makeTestProbe("p2", expecting: _Reception.Listing<_ActorRef<String>>.self)
 
         // ensure the ref is registered and known under both keys to both nodes
         first._receptionist.subscribe(p1.ref, to: key)
@@ -365,16 +377,17 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         try p2.eventuallyExpectListing(expected: allRefs, within: .seconds(10))
     }
 
+    @Test
     func test_clusterReceptionist_shouldSpreadInformationAmongManyNodes() async throws {
-        let (first, second) = await setUpPair {
+        let (first, second) = await self.testCase.setUpPair {
             $0.receptionist.ackPullReplicationIntervalSlow = .milliseconds(200)
         }
-        let third = await setUpNode("third")
-        let fourth = await setUpNode("fourth")
+        let third = await self.testCase.setUpNode("third")
+        let fourth = await self.testCase.setUpNode("fourth")
 
-        try await self.joinNodes(node: first, with: second)
-        try await self.joinNodes(node: first, with: third)
-        try await self.joinNodes(node: fourth, with: second)
+        try await self.testCase.joinNodes(node: first, with: second)
+        try await self.testCase.joinNodes(node: first, with: third)
+        try await self.testCase.joinNodes(node: fourth, with: second)
 
         let key = _Reception.Key(_ActorRef<String>.self, id: "key")
 
@@ -382,7 +395,7 @@ final class _OpLogClusterReceptionistClusteredTests: ClusteredActorSystemsXCTest
         first._receptionist.register(ref, with: key)
 
         func expectListingContainsRef(on system: ClusterSystem) throws {
-            let p = self.testKit(system).makeTestProbe("p", expecting: _Reception.Listing<_ActorRef<String>>.self)
+            let p = self.testCase.testKit(system).makeTestProbe("p", expecting: _Reception.Listing<_ActorRef<String>>.self)
             system._receptionist.subscribe(p.ref, to: key)
 
             try p.eventuallyExpectListing(expected: [ref], within: .seconds(3))

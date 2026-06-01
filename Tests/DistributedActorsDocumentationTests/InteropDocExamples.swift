@@ -6,28 +6,30 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import Dispatch
-import DistributedCluster
 import NIO
-import XCTest
+import Testing
 
 @testable import DistributedActorsTestKit
+@testable import DistributedCluster
 
-class InteropDocExamples: XCTestCase {
-    func example_asyncOp_sendResult_dispatch() throws {
+@Suite(.disabled("Documentation examples"), .serialized)
+struct InteropDocExamples {
+    @Test
+    func example_asyncOp_sendResult_dispatch() async throws {
         // tag::message_greetings[]
         enum Messages: _NotActuallyCodableMessage {
             case string(String)
         }
         // end::message_greetings[]
 
-        let system = ClusterSystem("System")
+        let system = await ClusterSystem("System")
         defer { try! system.shutdown().wait() }
         let behavior: _Behavior<Messages> = .receiveMessage { _ in
             // ...
@@ -50,7 +52,8 @@ class InteropDocExamples: XCTestCase {
         _ = behavior  // avoid not-used warning
     }
 
-    func example_asyncOp_sendResult_insideActor() throws {
+    @Test
+    func example_asyncOp_sendResult_insideActor() async throws {
         // tag::asyncOp_sendResult_insideActor_enum_Messages[]
         enum Messages: _NotActuallyCodableMessage {
             case fetchData
@@ -58,7 +61,7 @@ class InteropDocExamples: XCTestCase {
         }
         // end::asyncOp_sendResult_insideActor_enum_Messages[]
 
-        let system = ClusterSystem("System")
+        let system = await ClusterSystem("System")
         defer { try! system.shutdown().wait() }
 
         func someComputation() -> String {
@@ -92,7 +95,8 @@ class InteropDocExamples: XCTestCase {
         // end::asyncOp_sendResult_insideActor_external_api[]
     }
 
-    func example_asyncOp_onResultAsync() throws {
+    @Test
+    func example_asyncOp_onResultAsync() async throws {
         struct User {}
         struct Cache<Key, Value> {
             init(cacheDuration: Duration) {}
@@ -116,7 +120,7 @@ class InteropDocExamples: XCTestCase {
         }
         // end::asyncOp_onResultAsync_enum_Messages[]
 
-        let system = ClusterSystem("System")
+        let system = await ClusterSystem("System")
         defer { try! system.shutdown().wait() }
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let eventLoop = eventLoopGroup.next()
@@ -160,14 +164,15 @@ class InteropDocExamples: XCTestCase {
         _ = behavior
     }
 
-    func example_asyncOp_awaitResult() throws {
+    @Test
+    func example_asyncOp_awaitResult() async throws {
         // tag::asyncOp_awaitResult_enum_Messages[]
         enum Message: _NotActuallyCodableMessage {
             case addPrefix(string: String, recipient: _ActorRef<String>)
         }
         // end::asyncOp_awaitResult_enum_Messages[]
 
-        let system = ClusterSystem("System")
+        let system = await ClusterSystem("System")
         defer { try! system.shutdown().wait() }
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let eventLoop = eventLoopGroup.next()
@@ -201,12 +206,13 @@ class InteropDocExamples: XCTestCase {
         _ = behavior  // avoids warning: unused variable
     }
 
-    func example_asyncOp_awaitResultThrowing() throws {
+    @Test
+    func example_asyncOp_awaitResultThrowing() async throws {
         enum Message: _NotActuallyCodableMessage {
             case addPrefix(string: String, recipient: _ActorRef<String>)
         }
 
-        let system = ClusterSystem("System")
+        let system = await ClusterSystem("System")
         defer { try! system.shutdown().wait() }
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let eventLoop = eventLoopGroup.next()

@@ -6,35 +6,38 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
-import XCTest
+import Testing
 
 @testable import DistributedActorsTestKit
 @testable import DistributedCluster
 
-final class ActorTestKitTests: XCTestCase {
-    var system: ClusterSystem!
-    var testKit: ActorTestKit!
+@Suite(.serialized)
+final class ActorTestKitTests {
+    let system: ClusterSystem
+    let testKit: ActorTestKit
 
-    override func setUp() async throws {
+    init() async throws {
         self.system = await ClusterSystem(String(describing: type(of: self)))
         self.testKit = ActorTestKit(self.system)
     }
 
-    override func tearDown() async throws {
-        try await self.system.shutdown().wait()
+    deinit {
+        try! self.system.shutdown().wait()
     }
 
+    @Test
     func test_error_withMessage() throws {
         let error = self.testKit.error("test")
         "\(error)".contains("test").shouldBeTrue()
     }
 
+    @Test
     func test_fail_shouldNotImmediatelyFailWithinEventuallyBlock() throws {
         var counter = 0
 
@@ -46,6 +49,7 @@ final class ActorTestKitTests: XCTestCase {
         }
     }
 
+    @Test
     func test_nestedEventually_shouldProperlyHandleFailures() throws {
         var outerCounter = 0
         var innerCounter = 0
@@ -65,6 +69,7 @@ final class ActorTestKitTests: XCTestCase {
         }
     }
 
+    @Test
     func test_fishForMessages() throws {
         let p = self.testKit.makeTestProbe(expecting: String.self)
 
@@ -95,6 +100,7 @@ final class ActorTestKitTests: XCTestCase {
         )
     }
 
+    @Test
     func test_fishForTransformed() throws {
         let p = self.testKit.makeTestProbe(expecting: String.self)
 
@@ -125,6 +131,7 @@ final class ActorTestKitTests: XCTestCase {
         )
     }
 
+    @Test
     func test_fishFor_canThrow() throws {
         let p = self.testKit.makeTestProbe(expecting: String.self)
 

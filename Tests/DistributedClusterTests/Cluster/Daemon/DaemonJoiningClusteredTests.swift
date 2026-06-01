@@ -14,43 +14,48 @@
 
 import Distributed
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class DaemonJoiningClusteredTests: ClusteredActorSystemsXCTestCase {
-    override func configureLogCapture(settings: inout LogCapture.Settings) {
-        settings.excludeActorPaths = [
-            "/system/cluster/swim",
-            "/system/cluster/gossip",
-            "/system/replicator",
-            "/system/cluster",
-            "/system/clusterEvents",
-            "/system/cluster/leadership",
-            "/system/nodeDeathWatcher",
-
-            "/dead/system/receptionist-ref",  // FIXME(distributed): it should simply be quiet
-        ]
-        settings.excludeGrep = [
-            "timer"
-        ]
-    }
-
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct DaemonJoiningClusteredTests {
+    let testCase: ClusteredActorSystemsTestCase
     var daemon: ClusterDaemon?
 
-    override func tearDown() async throws {
-        try await super.tearDown()
-        try await self.daemon?.shutdown().wait()
+    init() throws {
+        let testCase = try ClusteredActorSystemsTestCase()
+        testCase.configureLogCapture = { settings in
+            settings.excludeActorPaths = [
+                "/system/cluster/swim",
+                "/system/cluster/gossip",
+                "/system/replicator",
+                "/system/cluster",
+                "/system/clusterEvents",
+                "/system/cluster/leadership",
+                "/system/nodeDeathWatcher",
+
+                "/dead/system/receptionist-ref",  // FIXME(distributed): it should simply be quiet
+            ]
+            settings.excludeGrep = [
+                "timer"
+            ]
+        }
+        self.testCase = testCase
     }
 
-    func test_shouldPerformLikeASeedNode() async throws {
+    @Test
+    mutating func test_shouldPerformLikeASeedNode() async throws {
         self.daemon = await ClusterSystem.startClusterDaemon()
-        let first = await self.setUpNode("first") { settings in
+        let first = await self.testCase.setUpNode("first") { settings in
             settings.discovery = .clusterd
         }
-        let second = await self.setUpNode("second") { settings in
+        let second = await self.testCase.setUpNode("second") { settings in
             settings.discovery = .clusterd
         }
-        try await ensureNodes(atLeast: .up, nodes: [first.cluster.node, second.cluster.node])
+        try await self.testCase.ensureNodes(atLeast: .up, nodes: [first.cluster.node, second.cluster.node])
+
+        // Manual tear down since we need to shut down the daemon:
+        try await self.daemon?.shutdown().wait()
     }
 }

@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,11 +15,12 @@
 import DistributedActorsTestKit
 import Foundation
 import Logging
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class ActorIsolationFailureHandlingTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct ActorIsolationFailureHandlingTests {
     private enum SimpleTestError: Error {
         case simpleError(reason: String)
     }
@@ -66,11 +67,18 @@ final class ActorIsolationFailureHandlingTests: SingleClusterSystemXCTestCase {
         }
     }
 
-    func test_worker_crashOnlyWorkerOnPlainErrorThrow() throws {
-        let pm: ActorTestProbe<SimpleProbeMessage> = self.testKit.makeTestProbe("testProbe-boss-1")
-        let pw: ActorTestProbe<Int> = self.testKit.makeTestProbe("testProbeForWorker-1")
+    let testCase: SingleClusterSystemTestCase
 
-        let healthyBoss: _ActorRef<String> = try system._spawn("healthyBoss", self.healthyBossBehavior(pm: pm.ref, pw: pw.ref))
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
+    @Test
+    func test_worker_crashOnlyWorkerOnPlainErrorThrow() throws {
+        let pm: ActorTestProbe<SimpleProbeMessage> = self.testCase.testKit.makeTestProbe("testProbe-boss-1")
+        let pw: ActorTestProbe<Int> = self.testCase.testKit.makeTestProbe("testProbeForWorker-1")
+
+        let healthyBoss: _ActorRef<String> = try self.testCase.system._spawn("healthyBoss", self.healthyBossBehavior(pm: pm.ref, pw: pw.ref))
 
         // watch parent and see it spawn the worker:
         pm.watch(healthyBoss)

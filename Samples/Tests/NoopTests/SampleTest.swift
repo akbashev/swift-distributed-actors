@@ -12,10 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-import XCTest
+import Testing
 
-final class SampleTest: XCTestCase {
-    func test_empty() {
-        // nothing here (so far...)
-    }
+@Test
+func empty() {
+    // nothing here (so far...)
 }

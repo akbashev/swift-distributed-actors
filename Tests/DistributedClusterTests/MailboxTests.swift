@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,13 +14,21 @@
 
 import DistributedActorsTestKit
 import Foundation
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class MailboxTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct MailboxTests {
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
+    @Test
     func test_sendMessage_shouldDropMessagesWhenFull() {
-        let mailbox: _Mailbox<Int> = _Mailbox(system: self.system, capacity: 2)
+        let mailbox: _Mailbox<Int> = _Mailbox(system: self.testCase.system, capacity: 2)
 
         (mailbox.enqueueUserMessage(Payload(payload: .message(1))) == .needsScheduling).shouldBeTrue()
         (mailbox.enqueueUserMessage(Payload(payload: .message(2))) == .alreadyScheduled).shouldBeTrue()

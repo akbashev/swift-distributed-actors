@@ -6,30 +6,36 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class BasicClusterSystemLifecycleTests: SingleClusterSystemXCTestCase, @unchecked Sendable {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct BasicClusterSystemLifecycleTests {
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
+    @Test
     func test_system_shouldAssignIdentityAndReadyActor() async throws {
-        try runAsyncAndBlock {
-            let first = await setUpNode("first")
+        let first = await self.testCase.setUpNode("first")
 
-            var stub: StubDistributedActor? = StubDistributedActor(actorSystem: first)
-            _ = stub
-            stub = nil
+        var stub: StubDistributedActor? = StubDistributedActor(actorSystem: first)
+        _ = stub
+        stub = nil
 
-            let identity = try self.logCapture.awaitLogContaining(testKit, text: "Assign identity")
-            let idString = "\(identity.metadata!["actor/id"]!)"
-            let ready = try self.logCapture.awaitLogContaining(testKit, text: "Actor ready")
-            "\(ready.metadata!["actor/id"]!)".shouldEqual(idString)
-        }
+        let identity = try self.testCase.logCapture.awaitLogContaining(self.testCase.testKit, text: "Assign identity")
+        let idString = "\(identity.metadata!["actor/id"]!)"
+        let ready = try self.testCase.logCapture.awaitLogContaining(self.testCase.testKit, text: "Actor ready")
+        "\(ready.metadata!["actor/id"]!)".shouldEqual(idString)
     }
 }

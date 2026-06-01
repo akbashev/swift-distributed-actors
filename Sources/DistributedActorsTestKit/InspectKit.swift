@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,14 +15,13 @@
 import Foundation
 // FIXME(regex): rdar://98705227 can't use regex on 5.7 on Linux because of a bug that crashes String.starts(with:) at runtime then
 import RegexBuilder
-import XCTest
+import Testing
 
 internal struct InspectKit {
     private static var baseDir: String {
         FileManager.default.currentDirectoryPath
     }
 
-    #if canImport(Foundation.Process)
     private static func runCommand(cmd: String, args: String...) -> (output: [Substring], error: [Substring], exitCode: Int32) {
         var output: [Substring] = []
         var error: [Substring] = []
@@ -55,7 +54,6 @@ internal struct InspectKit {
 
         return (output, error, status)
     }
-    #endif
 
     struct ActorStats {
         var stats: [String: Row] = [:]
@@ -146,10 +144,6 @@ internal struct InspectKit {
 
     /// Actor names to their counts
     static func actorStats() throws -> ActorStats {
-        #if !canImport(Foundation.Process)
-        struct UnsupportedPlatform: Error {}
-        throw UnsupportedPlatform()
-        #else
         // FIXME(regex): rdar://98705227 can't use regex on 5.7 on Linux because of a bug that crashes String.starts(with:) at runtime then
         let (out, err, _) = Self.runCommand(cmd: "\(self.baseDir)/scripts/dump_actors.sh")
 
@@ -178,25 +172,23 @@ internal struct InspectKit {
         }
 
         return ActorStats(stats: stats)
-        #endif
     }
 }
 
 extension [Substring: InspectKit.ActorStats] {}
 
-#if canImport(Foundation.Process)
 // Compatible with Swift on all macOS versions as well as Linux
 extension Process {
     var binaryPath: String? {
         get {
-            if #available(macOS 10.13, *) {  // '*' covers Linux
+            if #available(macOS 10.13, /* Linux */ *) {
                 return self.executableURL?.path
             } else {
                 return self.launchPath
             }
         }
         set {
-            if #available(macOS 10.13, *) {  // '*' covers Linux
+            if #available(macOS 10.13, /* Linux */ *) {
                 self.executableURL = newValue.map { URL(fileURLWithPath: $0) }
             } else {
                 self.launchPath = newValue
@@ -212,4 +204,3 @@ extension Process {
         }
     }
 }
-#endif

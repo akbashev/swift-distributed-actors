@@ -21,20 +21,6 @@ import Testing
 
 @testable import DistributedCluster
 
-final class PortFactory: Sendable {
-    static let shared: PortFactory = PortFactory()
-
-    let _port = Mutex(9001)
-
-    var nextPort: Int {
-        _port.withLock { port in
-            let currentPort = port
-            port += 1
-            return currentPort
-        }
-    }
-}
-
 /// Convenience class for building multi-node (yet same-process) tests with many actor systems involved.
 ///
 /// Systems started using `setUpNode` are automatically terminated upon test completion, and logs are automatically
@@ -123,8 +109,14 @@ public final class ClusteredActorSystemsTestCase: Sendable {
     public let _configureLogCapture: Mutex<(@Sendable (_ settings: inout LogCapture.Settings) -> Void)> = Mutex { _ in }
     public let _configureActorSystem: Mutex<(@Sendable (_ settings: inout ClusterSystemSettings) -> Void)> = Mutex { _ in }
 
+    let _port = Mutex(9001)
+
     var nextPort: Int {
-        PortFactory.shared.nextPort
+        self._port.withLock { port in
+            let currentPort = port
+            port += 1
+            return currentPort
+        }
     }
 
     public init(settings: Settings = .init()) throws {

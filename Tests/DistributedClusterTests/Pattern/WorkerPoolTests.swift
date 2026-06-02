@@ -32,7 +32,7 @@ struct WorkerPoolTests {
     func test_workerPool_registerNewlyStartedActors() async throws {
         let workerKey = DistributedReception.Key(Greeter.self, id: "request-workers")
 
-        let settings = WorkerPoolSettings(selector: .dynamic(workerKey))
+        let settings = WorkerPoolSettings(selector: .dynamic(workerKey), strategy: .simpleRoundRobin)
         let workers = try await WorkerPool(settings: settings, actorSystem: self.testCase.system)
 
         let pA: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("pA")
@@ -48,8 +48,7 @@ struct WorkerPoolTests {
             workerB.id: pB,
             workerC.id: pC,
         ]
-        // Workers are sorted by id then selected round-robin
-        let sortedWorkerIDs = Array(workerProbes.keys).sorted()
+        let workerIDs = [workerA.id, workerB.id, workerC.id]
 
         // Wait for all workers to be registered with the receptionist
         try await confirmation("all workers available") { finished in
@@ -67,7 +66,7 @@ struct WorkerPoolTests {
             _ = try await workers.submit(work: "\(i)")
 
             // We are submitting more work than there are workers
-            let workerID = sortedWorkerIDs[i % workerProbes.count]
+            let workerID = workerIDs[i % workerIDs.count]
             guard let probe = workerProbes[workerID] else {
                 throw self.testCase.testKit.fail("Missing test probe for worker \(workerID)")
             }
@@ -79,7 +78,7 @@ struct WorkerPoolTests {
     func test_workerPool_dynamic_removeDeadActors() async throws {
         let workerKey = DistributedReception.Key(Greeter.self, id: "request-workers")
 
-        let workers = try await WorkerPool(selector: .dynamic(workerKey), actorSystem: self.testCase.system)
+        let workers = try await WorkerPool(settings: .init(selector: .dynamic(workerKey), strategy: .simpleRoundRobin), actorSystem: self.testCase.system)
 
         let pA: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("pA")
         let pB: ActorTestProbe<String> = self.testCase.testKit.makeTestProbe("pB")
@@ -95,8 +94,7 @@ struct WorkerPoolTests {
             workerB!.id: pB,
             workerC!.id: pC,
         ]
-        // Workers are sorted by id then selected round-robin
-        var sortedWorkerIDs = Array(workerProbes.keys).sorted()
+        var workerIDs = [workerA!.id, workerB!.id, workerC!.id]
 
         // Wait for all workers to be registered with the receptionist
         try await confirmation("all workers available") { finished in
@@ -113,7 +111,7 @@ struct WorkerPoolTests {
         for i in 0...2 {
             _ = try await workers.submit(work: "all-available-\(i)")
 
-            let workerID = sortedWorkerIDs[i]
+            let workerID = workerIDs[i]
             guard let probe = workerProbes[workerID] else {
                 throw self.testCase.testKit.fail("Missing test probe for worker \(workerID)")
             }
@@ -121,7 +119,7 @@ struct WorkerPoolTests {
         }
 
         // Terminate workerA
-        sortedWorkerIDs.removeAll { $0 == workerA!.id }
+        workerIDs.removeAll { $0 == workerA!.id }
         workerA = nil
         try pA.expectMessage("Greeter deinit")
 
@@ -131,7 +129,7 @@ struct WorkerPoolTests {
 
             // We cannot be certain how round-robin position gets reset after A's termination,
             // so we don't enforce index check here.
-            let maybeGotItResults = try sortedWorkerIDs.compactMap {
+            let maybeGotItResults = try workerIDs.compactMap {
                 guard let probe = workerProbes[$0] else {
                     throw self.testCase.testKit.fail("Missing test probe for worker \($0)")
                 }
@@ -168,22 +166,28 @@ struct WorkerPoolTests {
         var workerB: Greeter? = Greeter(probe: pB, actorSystem: self.testCase.system)
         var workerC: Greeter? = Greeter(probe: pC, actorSystem: self.testCase.system)
 
+        var staticWorkers = [workerA!, workerB!, workerC!]
         // !-safe since we initialize workers above
-        let workers = try await WorkerPool(settings: .init(selector: .static([workerA!, workerB!, workerC!])), actorSystem: self.testCase.system)
+        let workers = try await WorkerPool(
+            settings: .init(
+                selector: .static(staticWorkers),
+                strategy: .simpleRoundRobin
+            ),
+            actorSystem: self.testCase.system
+        )
 
         let workerProbes: [ClusterSystem.ActorID: ActorTestProbe<String>] = [
             workerA!.id: pA,
             workerB!.id: pB,
             workerC!.id: pC,
         ]
-        // Workers are sorted by id then selected round-robin
-        var sortedWorkerIDs = Array(workerProbes.keys).sorted()
+        var workerIDs = staticWorkers.map(\.id)
 
         // Submit work with all workers available
         for i in 0...2 {
             _ = try await workers.submit(work: "all-available-\(i)")
 
-            let workerID = sortedWorkerIDs[i]
+            let workerID = workerIDs[i]
             guard let probe = workerProbes[workerID] else {
                 throw self.testCase.testKit.fail("Missing test probe for worker \(workerID)")
             }
@@ -191,7 +195,8 @@ struct WorkerPoolTests {
         }
 
         // Terminate workerA
-        sortedWorkerIDs.removeAll { $0 == workerA!.id }
+        staticWorkers.removeFirst()
+        workerIDs.removeAll { $0 == workerA!.id }
         workerA = nil
         try pA.expectMessage("Greeter deinit")
 
@@ -201,7 +206,7 @@ struct WorkerPoolTests {
 
             // We cannot be certain how round-robin position gets reset after A's termination,
             // so we don't enforce index check here.
-            let maybeGotItResults = try sortedWorkerIDs.compactMap {
+            let maybeGotItResults = try workerIDs.compactMap {
                 guard let probe = workerProbes[$0] else {
                     throw self.testCase.testKit.fail("Missing test probe for worker \($0)")
                 }
@@ -214,8 +219,10 @@ struct WorkerPoolTests {
         }
 
         // Terminate the rest of the workers
+        staticWorkers.removeFirst()
         workerB = nil
         try pB.expectMessage("Greeter deinit")
+        staticWorkers.removeFirst()
         workerC = nil
         try pC.expectMessage("Greeter deinit")
 

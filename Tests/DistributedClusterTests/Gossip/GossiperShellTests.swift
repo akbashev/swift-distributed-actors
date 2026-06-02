@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,25 +15,32 @@
 import DistributedActorsTestKit
 import Foundation
 import NIOSSL
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class GossiperShellTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct GossiperShellTests {
     func peerBehavior<T: Codable>() -> _Behavior<GossipShell<T, String>.Message> {
         .receiveMessage { msg in
             if "\(msg)".contains("stop") { return .stop } else { return .same }
         }
     }
 
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: test_down_beGossipedToOtherNodes
-
+    @Test
     func test_down_beGossipedToOtherNodes() throws {
-        let p = self.testKit.makeTestProbe(expecting: [_AddressableActorRef].self)
+        let p = self.testCase.testKit.makeTestProbe(expecting: [_AddressableActorRef].self)
 
         let control = try Gossiper._spawn(
-            self.system,
+            self.testCase.system,
             name: "gossiper",
             settings: .init(
                 interval: .seconds(1),
@@ -42,9 +49,9 @@ final class GossiperShellTests: SingleClusterSystemXCTestCase {
         ) { _ in InspectOfferedPeersTestGossipLogic(offeredPeersProbe: p.ref) }
 
         let first: _ActorRef<GossipShell<InspectOfferedPeersTestGossipLogic.Gossip, String>.Message> =
-            try self.system._spawn("first", self.peerBehavior())
+            try self.testCase.system._spawn("first", self.peerBehavior())
         let second: _ActorRef<GossipShell<InspectOfferedPeersTestGossipLogic.Gossip, String>.Message> =
-            try self.system._spawn("second", self.peerBehavior())
+            try self.testCase.system._spawn("second", self.peerBehavior())
 
         control.introduce(peer: first)
         control.introduce(peer: second)
@@ -97,12 +104,12 @@ final class GossiperShellTests: SingleClusterSystemXCTestCase {
 
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: test_unidirectional_yetEmitsAck_shouldWarn
-
+    @Test
     func test_unidirectional_yetReceivesAckRef_shouldWarn() throws {
-        let p = self.testKit.makeTestProbe(expecting: String.self)
+        let p = self.testCase.testKit.makeTestProbe(expecting: String.self)
 
         let control = try Gossiper._spawn(
-            self.system,
+            self.testCase.system,
             name: "noAcks",
             settings: .init(
                 interval: .milliseconds(100),
@@ -112,7 +119,7 @@ final class GossiperShellTests: SingleClusterSystemXCTestCase {
         )
 
         let first: _ActorRef<GossipShell<NoAcksTestGossipLogic.Gossip, NoAcksTestGossipLogic.Acknowledgement>.Message> =
-            try self.system._spawn("first", self.peerBehavior())
+            try self.testCase.system._spawn("first", self.peerBehavior())
 
         control.introduce(peer: first)
         control.update(StringGossipIdentifier("hi"), payload: .init("hello"))
@@ -121,12 +128,12 @@ final class GossiperShellTests: SingleClusterSystemXCTestCase {
                 identity: StringGossipIdentifier("example"),
                 origin: first,
                 .init("unexpected"),
-                ackRef: system.deadLetters.adapted()  // this is wrong on purpose; we're configured as `unidirectional`; this should cause warnings
+                ackRef: self.testCase.system.deadLetters.adapted()  // this is wrong on purpose; we're configured as `unidirectional`; this should cause warnings
             )
         )
 
-        try self.logCapture.awaitLogContaining(
-            self.testKit,
+        try self.testCase.logCapture.awaitLogContaining(
+            self.testCase.testKit,
             text: " Incoming gossip has acknowledgement actor ref and seems to be expecting an ACK, while this gossiper is configured as .unidirectional!"
         )
     }

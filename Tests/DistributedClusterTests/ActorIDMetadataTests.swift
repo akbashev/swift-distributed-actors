@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,8 +14,9 @@
 
 import Distributed
 import DistributedActorsTestKit
+import Foundation
 import NIOCore
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
@@ -48,7 +49,8 @@ distributed actor ThereCanBeOnlyOneClusterSingleton: ExampleClusterSingleton {
     }
 }
 
-final class ActorIDMetadataTests: ClusteredActorSystemsXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct ActorIDMetadataTests {
     distributed actor Example: CustomStringConvertible {
         typealias ActorSystem = ClusterSystem
 
@@ -69,16 +71,24 @@ final class ActorIDMetadataTests: ClusteredActorSystemsXCTestCase {
         }
     }
 
-    func test_metadata_shouldBeStoredInID() async throws {
-        let system = await setUpNode("first")
+    let testCase: ClusteredActorSystemsTestCase
+
+    init() throws {
+        self.testCase = try ClusteredActorSystemsTestCase()
+    }
+
+    @Test
+    func test_metadata_shouldBeStoredInID() async {
+        let system = await self.testCase.setUpNode("first")
         let userID = "user-1234"
         let example = await Example(userID: userID, actorSystem: system)
 
         example.metadata.exampleUserID.shouldEqual(userID)
     }
 
+    @Test
     func test_metadata_beUsableInDescription() async throws {
-        let system = await setUpNode("first")
+        let system = await self.testCase.setUpNode("first")
         let userID = "user-1234"
         let example = await Example(userID: userID, actorSystem: system)
 
@@ -86,15 +96,17 @@ final class ActorIDMetadataTests: ClusteredActorSystemsXCTestCase {
         try await example.assertThat(userID: userID)
     }
 
-    func test_metadata_initializedInline() async throws {
-        let system = await setUpNode("first")
+    @Test
+    func test_metadata_initializedInline() async {
+        let system = await self.testCase.setUpNode("first")
         let singleton = await ThereCanBeOnlyOneClusterSingleton(actorSystem: system)
 
         singleton.metadata.exampleClusterSingletonID.shouldEqual("singer-1234")
     }
 
+    @Test
     func test_metadata_wellKnown_coding() async throws {
-        let system = await setUpNode("first")
+        let system = await self.testCase.setUpNode("first")
         let singleton = await ThereCanBeOnlyOneClusterSingleton(actorSystem: system)
 
         let encoded = try JSONEncoder().encode(singleton)
@@ -105,8 +117,9 @@ final class ActorIDMetadataTests: ClusteredActorSystemsXCTestCase {
         back.metadata.wellKnown.shouldEqual("singer-1234")
     }
 
+    @Test
     func test_metadata_wellKnown_proto() async throws {
-        let system = await setUpNode("first")
+        let system = await self.testCase.setUpNode("first")
         let singleton = await ThereCanBeOnlyOneClusterSingleton(actorSystem: system)
 
         let context = Serialization.Context(log: system.log, system: system, allocator: .init())
@@ -116,8 +129,9 @@ final class ActorIDMetadataTests: ClusteredActorSystemsXCTestCase {
         back.metadata.wellKnown.shouldEqual(singleton.id.metadata.wellKnown)
     }
 
-    func test_metadata_wellKnown_equality() async throws {
-        let system = await setUpNode("first")
+    @Test
+    func test_metadata_wellKnown_equality() async {
+        let system = await self.testCase.setUpNode("first")
 
         let singleton = await ThereCanBeOnlyOneClusterSingleton(actorSystem: system)
 
@@ -131,8 +145,9 @@ final class ActorIDMetadataTests: ClusteredActorSystemsXCTestCase {
         set.count.shouldEqual(1)
     }
 
+    @Test
     func test_metadata_userDefined_coding() async throws {
-        let system = await setUpNode("first")
+        let system = await self.testCase.setUpNode("first")
         let singleton = await ThereCanBeOnlyOneClusterSingleton(actorSystem: system)
 
         let encoded = try JSONEncoder().encode(singleton)

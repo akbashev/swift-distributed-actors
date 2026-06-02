@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,32 +14,43 @@
 
 // tag::imports[]
 
-import ActorSingletonPlugin
 import DistributedCluster
+import Logging
 
 // end::imports[]
 
+// tag::singleton-actor[]
+distributed actor SampleSingleton: ClusterSingleton {
+    typealias ActorSystem = ClusterSystem
+
+    init(actorSystem: ActorSystem) {
+        self.actorSystem = actorSystem
+    }
+
+    distributed func greet(name: String) {
+        // ...
+    }
+}
+// end::singleton-actor[]
+
 class ActorSingletonDocExamples {
-    func example_ref() throws {
+    func example_ref() async throws {
         // tag::configure-system[]
-        let system = ClusterSystem("Sample") { settings in
-            settings += ActorSingletonPlugin()  // <1>
+        let system = await ClusterSystem("Sample") { settings in
+            settings += ClusterSingletonPlugin()  // <1>
         }
         // end::configure-system[]
 
-        let singletonBehavior: _Behavior<String> = .receive { context, name in
-            context.log.info("Hello \(name)!")
-            return .same
-        }
-
         // tag::host-ref[]
-        let singletonRef = try system.singleton.host(String.self, name: "SampleSingleton", singletonBehavior)  // <1>
-        singletonRef.tell("Jane Doe")  // <2>
+        let singletonRef = try await system.singleton.host(name: "SampleSingleton") { actorSystem in
+            SampleSingleton(actorSystem: actorSystem)  // <1>
+        }
+        try await singletonRef.greet(name: "Jane Doe")  // <2>
         // end::host-ref[]
 
         // tag::proxy-ref[]
-        let singletonProxyRef = try system.singleton.ref(of: String.self, name: "SampleSingleton")
-        singletonProxyRef.tell("Jane Doe")  // <1>
+        let singletonProxyRef = try await system.singleton.proxy(SampleSingleton.self, name: "SampleSingleton")
+        try await singletonProxyRef.greet(name: "Jane Doe")  // <1>
         // end::proxy-ref[]
     }
 }

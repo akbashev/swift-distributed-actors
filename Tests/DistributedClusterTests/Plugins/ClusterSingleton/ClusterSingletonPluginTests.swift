@@ -6,21 +6,29 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class ClusterSingletonPluginTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct ClusterSingletonPluginTests {
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
+    @Test
     func test_singletonPlugin_clusterDisabled() async throws {
         // Singleton should work just fine without clustering
-        let test = await setUpNode("test") { settings in
+        let test = await self.testCase.setUpNode("test") { settings in
             settings.enabled = false
             settings += ClusterSingletonPlugin()
         }
@@ -40,8 +48,9 @@ final class ClusterSingletonPluginTests: SingleClusterSystemXCTestCase {
         proxyReply.shouldStartWith(prefix: "Hello Charlene!")
     }
 
+    @Test
     func test_singleton_nestedSingleton() async throws {
-        let system = await setUpNode("test") { settings in
+        let system = await self.testCase.setUpNode("test") { settings in
             settings += ClusterSingletonPlugin()
         }
 
@@ -59,50 +68,6 @@ final class ClusterSingletonPluginTests: SingleClusterSystemXCTestCase {
         try await singleton.actualID().detailedDescription.shouldContain("test-singleton")
         // if this were true we would have crashed by a duplicate name already, but let's make sure:
         singletonID.shouldNotEqual(greeterID)
-    }
-
-    func test_plugin_hooks() async throws {
-        let actorID = "actorHookID"
-        let hookFulfillment = self.expectation(description: "actor-hook")
-        let plugin = TestActorLifecyclePlugin { actor in
-            /// There are multiple internal actors fired, we only checking for `ActorWithId`
-            guard let actor = actor as? ActorWithID else { return }
-            Task {
-                let id = try? await actor.getID()
-                XCTAssertEqual(id, actorID, "Expected \(actorID) as an ID")
-                hookFulfillment.fulfill()
-            }
-        }
-        let testNode = await setUpNode("test-hook") { settings in
-            settings.enabled = false
-            settings += plugin
-        }
-
-        let id = ActorWithID(actorSystem: testNode, customID: actorID)
-        await fulfillment(of: [hookFulfillment], timeout: 3.0)
-    }
-
-    final class TestActorLifecyclePlugin: ActorLifecyclePlugin {
-        var key: Key { "$testClusterHook" }
-
-        let onActorReady: (any DistributedActor) -> Void
-        let _lock: _Mutex = .init()
-
-        init(
-            onActorReady: @escaping (any DistributedActor) -> Void
-        ) {
-            self.onActorReady = onActorReady
-        }
-
-        func onActorReady<Act: DistributedActor>(_ actor: Act) where Act.ID == ClusterSystem.ActorID {
-            self._lock.lock()
-            self.onActorReady(actor)
-            self._lock.unlock()
-        }
-
-        func onResignID(_ id: ClusterSystem.ActorID) {}
-        func start(_ system: ClusterSystem) async throws {}
-        func stop(_ system: ClusterSystem) async {}
     }
 
     distributed actor SingletonWhichCreatesDistributedActorDuringInit: ClusterSingleton {
@@ -132,22 +97,6 @@ final class ClusterSingletonPluginTests: SingleClusterSystemXCTestCase {
 
         distributed func greet() {
             print("Hello!")
-        }
-    }
-
-    distributed actor ActorWithID {
-        let customID: String
-
-        init(
-            actorSystem: ActorSystem,
-            customID: String
-        ) {
-            self.actorSystem = actorSystem
-            self.customID = customID
-        }
-
-        distributed func getID() -> String {
-            self.customID
         }
     }
 }

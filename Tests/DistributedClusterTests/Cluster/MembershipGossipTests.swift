@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,31 +14,24 @@
 
 import DistributedActorsTestKit
 import NIO
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
 /// Tests of just the datatype
-final class MembershipGossipTests: XCTestCase {
-    var nodeA: Cluster.Node!
-    var nodeB: Cluster.Node!
-    var nodeC: Cluster.Node!
-    var fourthNode: Cluster.Node!
+@Suite(.timeLimit(.minutes(1)), .serialized)
+final class MembershipGossipTests {
+    let nodeA = Cluster.Node(systemName: "firstA", host: "127.0.0.1", port: 7111, nid: .random())
+    let nodeB = Cluster.Node(systemName: "secondB", host: "127.0.0.1", port: 7222, nid: .random())
+    let nodeC = Cluster.Node(systemName: "thirdC", host: "127.0.0.1", port: 7333, nid: .random())
+    let fourthNode = Cluster.Node(systemName: "fourthD", host: "127.0.0.1", port: 7444, nid: .random())
     lazy var allNodes = [
-        self.nodeA!, self.nodeB!, self.nodeC!, self.fourthNode!,
+        self.nodeA, self.nodeB, self.nodeC, self.fourthNode,
     ]
-
-    override func setUp() {
-        super.setUp()
-        self.nodeA = Cluster.Node(systemName: "firstA", host: "127.0.0.1", port: 7111, nid: .random())
-        self.nodeB = Cluster.Node(systemName: "secondB", host: "127.0.0.1", port: 7222, nid: .random())
-        self.nodeC = Cluster.Node(systemName: "thirdC", host: "127.0.0.1", port: 7333, nid: .random())
-        self.fourthNode = Cluster.Node(systemName: "fourthD", host: "127.0.0.1", port: 7444, nid: .random())
-    }
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Merging gossips
-
+    @Test
     func test_mergeForward_incomingGossip_firstGossipFromOtherNode() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -77,6 +70,7 @@ final class MembershipGossipTests: XCTestCase {
         )
     }
 
+    @Test
     func test_mergeForward_incomingGossip_firstGossipFromOtherNodes() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -127,6 +121,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.shouldEqual(expected)
     }
 
+    @Test
     func test_mergeForward_incomingGossip_sameVersions() {
         var gossip = Cluster.MembershipGossip(ownerNode: self.nodeA)
         _ = gossip.membership.join(self.nodeA)
@@ -139,6 +134,7 @@ final class MembershipGossipTests: XCTestCase {
         directive.effectiveChanges.shouldEqual([])
     }
 
+    @Test
     func test_mergeForward_incomingGossip_fromFourth_onlyKnowsAboutItself() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -179,6 +175,7 @@ final class MembershipGossipTests: XCTestCase {
         )
     }
 
+    @Test
     func test_mergeForward_incomingGossip_localHasRemoved_incomingHasOldViewWithDownNode() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -223,6 +220,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.membership.shouldEqual(gossipBeforeMerge.membership)
     }
 
+    @Test
     func test_mergeForward_incomingGossip_concurrent_leaderDisagreement() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -281,6 +279,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.shouldEqual(expected)
     }
 
+    @Test
     func test_mergeForward_incomingGossip_concurrent_simple() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -317,6 +316,7 @@ final class MembershipGossipTests: XCTestCase {
         )
     }
 
+    @Test
     func test_mergeForward_incomingGossip_hasNewNode() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -341,6 +341,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.membership.members(atLeast: .joining).shouldContain(Cluster.Member(node: self.nodeB, status: .joining))
     }
 
+    @Test
     func test_mergeForward_removal_incomingGossip_isAhead_hasRemovedNodeKnownToBeDown() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -387,6 +388,7 @@ final class MembershipGossipTests: XCTestCase {
         )
     }
 
+    @Test
     func test_mergeForward_incomingGossip_removal_isAhead_hasMyNodeRemoved_thusWeKeepItAsRemoved() {
         var gossip = Cluster.MembershipGossip.parse(
             """
@@ -438,7 +440,7 @@ final class MembershipGossipTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: Convergence
-
+    @Test
     func test_converged_shouldBeTrue_forNoMembers() {
         var gossip = Cluster.MembershipGossip(ownerNode: self.nodeA)
         _ = gossip.membership.join(self.nodeA)
@@ -448,6 +450,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.converged().shouldBeTrue()
     }
 
+    @Test
     func test_converged_amongUpMembers() {
         var gossip = Cluster.MembershipGossip(ownerNode: self.nodeA)
         _ = gossip.membership.join(self.nodeA)
@@ -492,6 +495,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.converged().shouldBeTrue()
     }
 
+    @Test
     func test_converged_othersAreOnlyDown() {
         let gossip = Cluster.MembershipGossip.parse(
             """
@@ -509,6 +513,7 @@ final class MembershipGossipTests: XCTestCase {
     }
 
     // FIXME: we should not need .joining nodes to participate on convergence()
+    @Test(.disabled("Pending fix for convergence logic with joining/down members"))
     func fixme_converged_joiningOrDownMembersDoNotCount() {
         var gossip = Cluster.MembershipGossip(ownerNode: self.nodeA)
         _ = gossip.membership.join(self.nodeA)
@@ -561,6 +566,7 @@ final class MembershipGossipTests: XCTestCase {
         gossip.converged().shouldBeTrue()
     }
 
+    @Test
     func test_gossip_eventuallyConverges() {
         func makeRandomGossip(owner node: Cluster.Node) -> Cluster.MembershipGossip {
             var gossip = Cluster.MembershipGossip(ownerNode: node)
@@ -597,7 +603,7 @@ final class MembershipGossipTests: XCTestCase {
             4: fourthGossip,
         ]
 
-        for (_, gossip) in gossips {
+        gossips.forEach { _, gossip in
             assert(!gossip.converged(), "Should not start out convergent")
         }
 
@@ -619,7 +625,7 @@ final class MembershipGossipTests: XCTestCase {
 
         let allConverged = gossips.allSatisfy { $1.converged() }
         guard allConverged else {
-            XCTFail(
+            Issue.record(
                 """
                 Gossips among \(gossips.count) members did NOT converge after \(gossipSend) (individual) sends.
                 \(gossips.values.map { "\($0)" }.joined(separator: "\n"))

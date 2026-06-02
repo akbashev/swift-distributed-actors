@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -16,15 +16,23 @@ import Dispatch
 import DistributedActorsTestKit
 import Foundation
 import NIO
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class StubDistributedActorTests: SingleClusterSystemXCTestCase {
-    func test_StubDistributedActor_shouldAlwaysResolveAsRemote() {
-        let anyID = system.assignID(StubDistributedActor.self)
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct StubDistributedActorTests {
+    let testCase: SingleClusterSystemTestCase
 
-        let resolved = system._resolveStub(id: anyID)
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
+    @Test
+    func test_StubDistributedActor_shouldAlwaysResolveAsRemote() {
+        let anyID = self.testCase.system.assignID(StubDistributedActor.self)
+
+        let resolved = self.testCase.system._resolveStub(id: anyID)
         __isRemoteActor(resolved).shouldBeTrue()
     }
 }

@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,6 +15,9 @@
 // tag::imports[]
 
 import DistributedCluster
+import Logging
+
+@testable import DistributedCluster
 
 // end::imports[]
 
@@ -142,7 +145,7 @@ class DeathWatchDocExamples {
                 context.log.info("Stopping since player remained not connected for a while...")
                 return .stop
             }
-        }.receiveSpecificSignal(Signals.Terminated.self) { context, terminated in
+        }.receiveSpecificSignal(_Signals.Terminated.self) { context, terminated in
             guard isPlayer(terminated) else {
                 return .unhandled
             }

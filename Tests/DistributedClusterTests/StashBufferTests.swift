@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,13 +14,21 @@
 
 import DistributedActorsTestKit
 import Foundation
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class _StashBufferTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct _StashBufferTests {
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
+    }
+
+    @Test
     func test_stash_shouldStashMessages() throws {
-        let probe: ActorTestProbe<Int> = self.testKit.makeTestProbe()
+        let probe: ActorTestProbe<Int> = self.testCase.testKit.makeTestProbe()
 
         let unstashBehavior: _Behavior<Int> = .receiveMessage { message in
             probe.ref.tell(message)
@@ -41,7 +49,7 @@ final class _StashBufferTests: SingleClusterSystemXCTestCase {
             }
         }
 
-        let stasher = try system._spawn(.anonymous, behavior)
+        let stasher = try self.testCase.system._spawn(.anonymous, behavior)
 
         for i in 0...10 {
             stasher.tell(i)
@@ -55,6 +63,7 @@ final class _StashBufferTests: SingleClusterSystemXCTestCase {
         try probe.expectMessage(10)
     }
 
+    @Test
     func test_fullStash_shouldThrowWhenAttemptToStashSomeMore() throws {
         let stash: _StashBuffer<Int> = _StashBuffer(capacity: 1)
 
@@ -65,10 +74,11 @@ final class _StashBufferTests: SingleClusterSystemXCTestCase {
         }
     }
 
+    @Test
     func test_unstash_intoSetupBehavior_shouldCanonicalize() throws {
-        let p = self.testKit.makeTestProbe(expecting: Int.self)
+        let p = self.testCase.testKit.makeTestProbe(expecting: Int.self)
 
-        _ = try self.system._spawn(
+        _ = try self.testCase.system._spawn(
             "unstashIntoSetup",
             _Behavior<Int>.setup { context in
                 let stash = _StashBuffer<Int>(capacity: 2)
@@ -89,8 +99,9 @@ final class _StashBufferTests: SingleClusterSystemXCTestCase {
         try p.expectMessage(1)
     }
 
+    @Test
     func test_messagesStashedAgainDuringUnstashingShouldNotBeProcessedInTheSameRun() throws {
-        let probe: ActorTestProbe<Int> = self.testKit.makeTestProbe()
+        let probe: ActorTestProbe<Int> = self.testCase.testKit.makeTestProbe()
 
         let stash: _StashBuffer<Int> = _StashBuffer(capacity: 100)
 
@@ -111,7 +122,7 @@ final class _StashBufferTests: SingleClusterSystemXCTestCase {
             }
         }
 
-        let stasher = try system._spawn(.anonymous, behavior)
+        let stasher = try self.testCase.system._spawn(.anonymous, behavior)
 
         for i in 0...10 {
             stasher.tell(i)

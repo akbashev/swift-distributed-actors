@@ -6,19 +6,20 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import XCTest
+import Testing
 
 @testable import DistributedActorsTestKit
 @testable import DistributedCluster
 
-class DurationTests: XCTestCase {
+struct DurationTests {
+    @Test
     func test_duration_rendersPrettyDurations() {
         Duration.nanoseconds(12).prettyDescription.shouldEqual("12ns")
         Duration.microseconds(12).prettyDescription.shouldEqual("12μs")

@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -17,27 +17,30 @@ import DistributedActorsTestKit
 import Foundation
 import NIO
 import NIOFoundationCompat
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class TraversalTests: SingleClusterSystemXCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct TraversalTests {
     struct ActorReady: Codable {
         let name: String
     }
 
-    override func setUp() {
-        super.setUp()
+    let testCase: SingleClusterSystemTestCase
+
+    init() async throws {
+        self.testCase = try await SingleClusterSystemTestCase(name: String(describing: type(of: self)))
 
         // we use the probe to make sure all actors are started before we start asserting on the tree
-        let probe = self.testKit.makeTestProbe(expecting: ActorReady.self)
+        let probe = self.testCase.testKit.makeTestProbe(expecting: ActorReady.self)
 
         let tellProbeWhenReady: _Behavior<Int> = .setup { context in
             probe.tell(ActorReady(name: context.name))
             return .receiveMessage { _ in .same }
         }
 
-        let _: _ActorRef<String> = try! self.system._spawn(
+        let _: _ActorRef<String> = try! self.testCase.system._spawn(
             "hello",
             .setup { context in
                 probe.tell(ActorReady(name: context.name))
@@ -46,7 +49,7 @@ final class TraversalTests: SingleClusterSystemXCTestCase {
             }
         )
 
-        let _: _ActorRef<String> = try! self.system._spawn(
+        let _: _ActorRef<String> = try! self.testCase.system._spawn(
             "other",
             .setup { context in
                 probe.tell(ActorReady(name: context.name))
@@ -64,12 +67,14 @@ final class TraversalTests: SingleClusterSystemXCTestCase {
         try! probe.expectNoMessage(for: .milliseconds(300))
     }
 
-    func test_printTree_shouldPrintActorTree() throws {
-        self.system._printTree()
+    @Test
+    func test_printTree_shouldPrintActorTree() {
+        self.testCase.system._printTree()
     }
 
+    @Test
     func test_traverse_shouldAllowImplementingCollect() {
-        let found: _TraversalResult<String> = self.system._traverseAll { _, ref in
+        let found: _TraversalResult<String> = self.testCase.system._traverseAll { _, ref in
             if ref.id.name.contains("inner") {
                 // collect it
                 return .accumulateSingle(ref.id.name)
@@ -89,8 +94,9 @@ final class TraversalTests: SingleClusterSystemXCTestCase {
         }
     }
 
+    @Test
     func test_traverse_shouldHaveRightDepthInContext() {
-        let _: _TraversalResult<String> = self.system._traverseAll { context, ref in
+        let _: _TraversalResult<String> = self.testCase.system._traverseAll { context, ref in
             if ref.id.name == "hello" {
                 context.depth.shouldEqual(1)
                 return .continue

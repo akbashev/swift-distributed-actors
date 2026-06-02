@@ -6,23 +6,24 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class OpLogStreamTests: XCTestCase {
+struct OpLogStreamTests {
     enum TestOp: Equatable, OpLogStreamOp {
         case add(id: String)
         case rm(id: String)
     }
 
+    @Test
     func test_ops_replay() {
         let stream = OpLog(of: TestOp.self, batchSize: 50)
         stream.add(.add(id: "one"))
@@ -41,6 +42,7 @@ final class OpLogStreamTests: XCTestCase {
         )
     }
 
+    @Test
     func test_ops_replay_beyondEnd() {
         let stream = OpLog(of: TestOp.self, batchSize: 50)
         stream.add(.add(id: "one"))
@@ -63,6 +65,7 @@ final class OpLogStreamTests: XCTestCase {
         replayer.nextOpsChunk().shouldBeEmpty()
     }
 
+    @Test
     func test_ops_replay_confirm_replay() {
         let stream = OpLog(of: TestOp.self, batchSize: 50)
         stream.add(.add(id: "one"))

@@ -6,21 +6,21 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class ActorPathTests: XCTestCase {
+struct ActorPathTests {
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: ActorPath
-
+    @Test
     func test_shouldNotAllow_illegalCharacters() throws {
         try shouldThrow(expected: ActorPathError.self) {
             _ = try ActorPath(root: "")
@@ -30,6 +30,7 @@ final class ActorPathTests: XCTestCase {
         }
     }
 
+    @Test
     func test_pathsWithSameSegments_shouldBeEqual() throws {
         let pathA = try ActorPath(root: "test") / ActorPathSegment("foo") / ActorPathSegment("bar")
         let pathB = try ActorPath(root: "test") / ActorPathSegment("foo") / ActorPathSegment("bar")
@@ -37,6 +38,7 @@ final class ActorPathTests: XCTestCase {
         pathA.shouldEqual(pathB)
     }
 
+    @Test
     func test_pathsWithSameSegments_shouldHaveSameHasCode() throws {
         let pathA = try ActorPath(root: "test") / ActorPathSegment("foo") / ActorPathSegment("bar")
         let pathB = try ActorPath(root: "test") / ActorPathSegment("foo") / ActorPathSegment("bar")
@@ -44,17 +46,20 @@ final class ActorPathTests: XCTestCase {
         pathA.hashValue.shouldEqual(pathB.hashValue)
     }
 
+    @Test
     func test_path_shouldRenderNicely() throws {
         let pathA = try ActorPath(root: "test") / ActorPathSegment("foo") / ActorPathSegment("bar")
         pathA.description.shouldEqual("/test/foo/bar")
     }
 
+    @Test
     func test_pathName_shouldRenderNicely() throws {
         let pathA = try ActorPath(root: "test") / ActorPathSegment("foo") / ActorPathSegment("bar")
 
         pathA.name.description.shouldEqual("bar")
     }
 
+    @Test
     func test_rootPath_shouldRenderAsExpected() throws {
         let rootPath = ActorPath._root
 
@@ -62,6 +67,7 @@ final class ActorPathTests: XCTestCase {
         rootPath.name.shouldEqual("/")
     }
 
+    @Test
     func test_path_startsWith() throws {
         let path = try ActorPath(root: "test").appending("foo").appending("bar")
         path.starts(with: path).shouldBeTrue()  // TODO: fixme consistency of matchers, some throw and some not

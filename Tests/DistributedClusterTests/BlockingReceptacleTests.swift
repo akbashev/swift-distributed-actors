@@ -6,18 +6,19 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-class BlockingReceptacleTests: XCTestCase {
+struct BlockingReceptacleTests {
+    @Test
     func test_blockingReceptacle_singleThreadedOfferWait() {
         let receptacle: BlockingReceptacle<String> = BlockingReceptacle()
 
@@ -26,6 +27,7 @@ class BlockingReceptacleTests: XCTestCase {
         res.shouldEqual("hello")
     }
 
+    @Test
     func test_blockingReceptacle_twoThreads() throws {
         let receptacle: BlockingReceptacle<String> = BlockingReceptacle()
 
@@ -37,6 +39,7 @@ class BlockingReceptacleTests: XCTestCase {
         res.shouldEqual("hello")
     }
 
+    @Test
     func test_blockingReceptacle_manyWaiters() throws {
         let receptacle: BlockingReceptacle<String> = BlockingReceptacle()
 

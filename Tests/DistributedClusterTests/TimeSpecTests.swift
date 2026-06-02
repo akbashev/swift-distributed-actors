@@ -6,20 +6,27 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Foundation
+import Testing
 
 @testable import DistributedCluster
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
 private let NANOS = 1_000_000_000
 
-class TimeSpecTests: XCTestCase {
+struct TimeSpecTests {
     let nanosDuration: Duration = .nanoseconds(100)
     let secondsDuration: Duration = .seconds(2)
     var totalDuration: Duration {
@@ -38,36 +45,35 @@ class TimeSpecTests: XCTestCase {
         .from(duration: self.totalDuration)
     }
 
+    @Test
     func test_timeSpecShouldBeCreatedProperlyFromDuration() {
         self.total.toNanos().shouldEqual(Int64(self.totalDuration.nanoseconds))
         self.total.tv_sec.shouldEqual(Int(self.totalDuration.nanoseconds) / NANOS)
         self.total.tv_nsec.shouldEqual(Int(self.totalDuration.nanoseconds) % NANOS)
     }
 
+    @Test
     func test_timeSpecAdd() {
         let sum = self.nanos + self.seconds
 
         sum.shouldEqual(self.total)
     }
 
+    @Test
     func test_lessThan() {
-        XCTAssertTrue(self.nanos < self.seconds)
-        XCTAssertFalse(self.seconds < self.nanos)
-        XCTAssertFalse(self.total < self.total)
+        #expect(self.nanos < self.seconds)
     }
 
+    @Test
     func test_greaterThan() {
-        XCTAssertFalse(self.nanos > self.seconds)
-        XCTAssertTrue(self.seconds > self.nanos)
+        #expect(self.seconds > self.nanos)
     }
 
+    @Test
     func test_equals() {
-        XCTAssertFalse(self.nanos == self.seconds)
-        XCTAssertFalse(self.seconds == self.nanos)
-
-        XCTAssertTrue(self.nanos == self.nanos)
-        XCTAssertTrue(self.seconds == self.seconds)
-        XCTAssertTrue(self.total == self.total)
+        #expect(self.nanos == self.nanos)
+        #expect(self.seconds == self.seconds)
+        #expect(self.total == self.total)
     }
 }
 

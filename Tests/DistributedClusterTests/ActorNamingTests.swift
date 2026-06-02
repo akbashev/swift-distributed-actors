@@ -6,18 +6,19 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class ActorNamingTests: XCTestCase {
+struct ActorNamingTests {
+    @Test
     func test_makeName_unique() {
         var context = ActorNamingContext()
         let naming = _ActorNaming.unique("hello")
@@ -28,6 +29,7 @@ final class ActorNamingTests: XCTestCase {
         }
     }
 
+    @Test
     func test_makeName_sequentialNumeric() {
         var context = ActorNamingContext()
         let naming = _ActorNaming(unchecked: .prefixed(prefix: "hello", suffixScheme: .sequentialNumeric))
@@ -38,6 +40,7 @@ final class ActorNamingTests: XCTestCase {
         }
     }
 
+    @Test
     func test_makeName_letters() {
         var context = ActorNamingContext()
         let naming = _ActorNaming(unchecked: .prefixed(prefix: "hello", suffixScheme: .letters))

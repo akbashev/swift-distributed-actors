@@ -6,18 +6,19 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class TimeoutBasedDowningInstanceTests: XCTestCase {
+@Suite(.timeLimit(.minutes(1)), .serialized)
+final class TimeoutBasedDowningInstanceTests {
     var instance: TimeoutBasedDowningStrategy!
 
     let selfNode = Cluster.Node(endpoint: Cluster.Endpoint(systemName: "Test", host: "localhost", port: 8888), nid: .random())
@@ -32,13 +33,13 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
     let nonMemberNode = Cluster.Node(endpoint: Cluster.Endpoint(systemName: "Test", host: "localhost", port: 1111), nid: .random())
     lazy var nonMember = Cluster.Member(node: self.nonMemberNode, status: .up)
 
-    override func setUp() {
+    init() {
         self.instance = TimeoutBasedDowningStrategy(.default, selfNode: self.selfNode)
     }
 
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: onLeaderChange
-
+    @Test
     func test_onLeaderChange_whenNotLeaderAndNewLeaderIsSelfAddress_shouldBecomeLeader() throws {
         self.instance.isLeader.shouldBeFalse()
         let directive = try self.instance.onLeaderChange(to: self.selfMember)
@@ -50,6 +51,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
     }
 
     // FIXME: has to be changed a bit when downing moved to subscribing to Cluster.MembershipChange events
+    @Test
     func test_onLeaderChange_whenNotLeaderAndNewLeaderIsOtherAddress_shouldNotBecomeLeader() throws {
         self.instance.isLeader.shouldBeFalse()
 
@@ -62,6 +64,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         self.instance.isLeader.shouldBeFalse()
     }
 
+    @Test
     func test_onLeaderChange_whenLeaderAndNewLeaderIsOtherAddress_shouldLoseLeadership() throws {
         _ = self.instance.membership.join(self.selfNode)
         _ = self.instance.membership.join(self.otherNode)
@@ -76,6 +79,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         self.instance.isLeader.shouldBeFalse()
     }
 
+    @Test
     func test_onLeaderChange_whenLeaderAndNewLeaderIsSelfAddress_shouldStayLeader() throws {
         _ = try self.instance.membership.applyLeadershipChange(to: self.selfMember)
         self.instance.isLeader.shouldBeTrue()
@@ -83,6 +87,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         self.instance.isLeader.shouldBeTrue()
     }
 
+    @Test
     func test_onLeaderChange_whenLeaderAndNoNewLeaderIsElected_shouldLoseLeadership() throws {
         _ = try self.instance.membership.applyLeadershipChange(to: self.selfMember)
         self.instance.isLeader.shouldBeTrue()
@@ -90,12 +95,14 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         self.instance.isLeader.shouldBeFalse()
     }
 
+    @Test
     func test_onLeaderChange_whenNotLeaderAndNoNewLeaderIsElected_shouldNotBecomeLeader() throws {
         self.instance.isLeader.shouldBeFalse()
         _ = try self.instance.onLeaderChange(to: nil)
         self.instance.isLeader.shouldBeFalse()
     }
 
+    @Test
     func test_onLeaderChange_whenBecomingLeaderAndNodesPendingToBeDowned_shouldReturnMarkAsDown() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         self.instance._markAsDown.insert(member)
@@ -110,7 +117,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: onTimeout
-
+    @Test
     func test_onTimeout_whenNotCurrentlyLeader_shouldInsertMemberAddressIntoMarkAsDown() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         self.instance.isLeader.shouldBeFalse()
@@ -124,6 +131,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         self.instance._markAsDown.shouldContain(member)
     }
 
+    @Test
     func test_onTimeout_whenCurrentlyLeader_shouldReturnMarkAsDown() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         _ = try self.instance.membership.applyLeadershipChange(to: self.selfMember)
@@ -137,6 +145,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         node.shouldEqual([member])
     }
 
+    @Test
     func test_onTimeout_shouldNotRetainAlreadyIssuedAsDownMembers() throws {
         _ = self.instance.membership.join(self.selfNode)
         _ = self.instance.membership.join(self.otherNode)
@@ -167,7 +176,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: onMemberRemoved
-
+    @Test
     func test_onMemberRemoved_whenMemberWasUnreachable_shouldReturnCancelTimer() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         self.instance._unreachable.insert(member)
@@ -178,6 +187,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         }
     }
 
+    @Test
     func test_onMemberRemoved_whenMemberWasMarkAsDown_shouldReturnNone() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         self.instance._markAsDown.insert(member)
@@ -188,6 +198,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         }
     }
 
+    @Test
     func test_onMemberRemoved_whenMemberNotKnown_shouldReturnNone() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         let directive = self.instance.onMemberRemoved(member)
@@ -199,7 +210,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: onMemberReachable
-
+    @Test
     func test_onMemberReachable_whenMemberWasUnreachable_shouldReturnCancelTimer() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         self.instance._unreachable.insert(member)
@@ -210,6 +221,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         }
     }
 
+    @Test
     func test_onMemberReachable_whenMemberWasMarkAsDown_shouldReturnNone() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         self.instance._markAsDown.insert(member)
@@ -220,6 +232,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
         }
     }
 
+    @Test
     func test_onMemberReachable_whenMemberNotKnown_shouldReturnNone() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         let directive = self.instance.onMemberReachable(.init(member: member.asUnreachable))
@@ -231,7 +244,7 @@ final class TimeoutBasedDowningInstanceTests: XCTestCase {
 
     // ==== ------------------------------------------------------------------------------------------------------------
     // MARK: onMemberUnreachable
-
+    @Test
     func test_onMemberUnreachable_shouldAddAddressOfMemberToUnreachableSet() throws {
         let member = Cluster.Member(node: self.otherNode, status: .up)
         guard case .startTimer = self.instance.onMemberUnreachable(.init(member: member.asUnreachable)).underlying else {

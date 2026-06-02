@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,26 +15,33 @@
 import DistributedActorsTestKit
 import Logging
 import NIO
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-final class ShootTheOtherNodeClusteredTests: ClusteredActorSystemsXCTestCase {
-    override func configureLogCapture(settings: inout LogCapture.Settings) {
-        settings.excludeGrep = [
-            "_TimerKey"
-        ]
-        settings.excludeActorPaths = [
-            "/system/cluster/swim"
-        ]
-        settings.minimumLogLevel = .info
+@Suite(.timeLimit(.minutes(1)), .serialized)
+struct ShootTheOtherNodeClusteredTests {
+    let testCase: ClusteredActorSystemsTestCase
+
+    init() throws {
+        self.testCase = try ClusteredActorSystemsTestCase()
+        self.testCase.configureLogCapture = { settings in
+            settings.excludeGrep = [
+                "_TimerKey"
+            ]
+            settings.excludeActorPaths = [
+                "/system/cluster/swim"
+            ]
+            settings.minimumLogLevel = .info
+        }
     }
 
+    @Test
     func test_shootOtherNodeShouldTerminateIt() async throws {
-        let (local, remote) = await setUpPair()
+        let (local, remote) = await self.testCase.setUpPair()
 
         // also assures they are associated
-        try await self.joinNodes(node: local, with: remote, ensureWithin: .seconds(5), ensureMembers: .up)
+        try await self.testCase.joinNodes(node: local, with: remote, ensureWithin: .seconds(5), ensureMembers: .up)
 
         let remoteAssociationControlState0 = local._cluster!.getEnsureAssociation(with: remote.cluster.node)
         guard case ClusterShell.StoredAssociationState.association(let remoteControl0) = remoteAssociationControlState0 else {
@@ -44,11 +51,11 @@ final class ShootTheOtherNodeClusteredTests: ClusteredActorSystemsXCTestCase {
         ClusterShell.shootTheOtherNodeAndCloseConnection(system: local, targetNodeAssociation: remoteControl0)
 
         // the remote should get the "shot" and become down asap
-        try self.testKit(local).eventually(within: .seconds(3)) {
+        try self.testCase.testKit(local).eventually(within: .seconds(3)) {
             // we do NOT failTest:, since we are in an eventuallyBlock and are waiting for the logs to happen still
             // the eventually block will escalate the thrown errors if they do not cease within the time limit.
-            try self.capturedLogs(of: remote).shouldContain(prefix: "Received .restInPeace", failTest: false)
-            try self.capturedLogs(of: remote).shouldContain(prefix: "Self node was marked [.down]", failTest: false)
+            try self.testCase.capturedLogs(of: remote).shouldContain(prefix: "Received .restInPeace", failTest: false)
+            try self.testCase.capturedLogs(of: remote).shouldContain(prefix: "Self node was marked [.down]", failTest: false)
         }
     }
 }

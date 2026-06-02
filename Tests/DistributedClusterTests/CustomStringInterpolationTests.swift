@@ -6,24 +6,26 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
 
 import DistributedActorsTestKit
-import XCTest
+import Testing
 
 @testable import DistributedCluster
 
-class CustomStringInterpolationTests: XCTestCase {
+struct CustomStringInterpolationTests {
+    @Test
     func test_leftPadTo_whenValueShorterThanPadTo() {
         let padded = "\("hello world", leftPadTo: 16)"
         padded.count.shouldEqual(16)
         padded.shouldEqual("     hello world")
     }
 
+    @Test
     func test_leftPadTo_whenValueLongerThanPadTo() {
         let phrase = "hello world"
         let padded = "\(phrase, leftPadTo: 4)"
@@ -31,6 +33,7 @@ class CustomStringInterpolationTests: XCTestCase {
         padded.shouldEqual(phrase)
     }
 
+    @Test
     func test_leftPadTo_whenValueEqualThanPadTo() {
         let phrase = "hello world"
         let padded = "\(phrase, leftPadTo: phrase.count)"

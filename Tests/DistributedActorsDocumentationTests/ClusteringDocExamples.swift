@@ -6,7 +6,7 @@
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of Swift Distributed Actors project authors
+// See CONTRIBUTORS.md for the list of Swift Distributed Actors project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,14 +14,16 @@
 
 import DistributedCluster
 import NIOSSL
-import XCTest
+import Testing
 
 @testable import DistributedActorsTestKit
 
-class ClusteringDocExamples: XCTestCase {
-    func example_config_tls() throws {
+@Suite(.disabled("Documentation examples"), .serialized)
+struct ClusteringDocExamples {
+    @Test
+    func example_config_tls() async throws {
         // tag::config_tls[]
-        let system = ClusterSystem("TestSystem") { settings in
+        let system = await ClusterSystem("TestSystem") { settings in
             // ...
             settings.tls = TLSConfiguration.makeServerConfiguration(  // <1>
                 certificateChain: try! NIOSSLCertificate.fromPEMFile("/path/to/certificate.pem").map { NIOSSLCertificateSource.certificate($0) },  // <2>
@@ -37,9 +39,10 @@ class ClusteringDocExamples: XCTestCase {
         try! await system.shutdown().wait()
     }
 
-    func example_config_tls_passphrase() throws {
+    @Test
+    func example_config_tls_passphrase() async throws {
         // tag::config_tls_passphrase[]
-        let system = ClusterSystem("TestSystem") { settings in
+        let system = await ClusterSystem("TestSystem") { settings in
             // ...
             settings.tlsPassphraseCallback = { setter in
                 setter([UInt8]("password".utf8))

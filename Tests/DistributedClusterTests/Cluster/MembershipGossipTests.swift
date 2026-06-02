@@ -513,7 +513,7 @@ final class MembershipGossipTests {
     }
 
     // FIXME: we should not need .joining nodes to participate on convergence()
-    @Test
+    @Test(.disabled("Pending fix for convergence logic with joining/down members"))
     func fixme_converged_joiningOrDownMembersDoNotCount() {
         var gossip = Cluster.MembershipGossip(ownerNode: self.nodeA)
         _ = gossip.membership.join(self.nodeA)

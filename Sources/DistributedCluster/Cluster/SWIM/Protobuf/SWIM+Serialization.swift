@@ -77,14 +77,13 @@ extension SWIM.GossipPayload: @retroactive Decodable, @retroactive Encodable, _P
     }
 
     public init(fromProto proto: _ProtoSWIMGossipPayload, context: Serialization.Context) throws {
-        precondition(Peer.self == SWIMActor.self)
         if proto.member.isEmpty {
             self = .none
         } else {
-            let members: [SWIM.Member<SWIMActor>] = try proto.member.map { proto in
-                try .init(fromProto: proto, context: context)
+            let members = try proto.member.map { proto in
+                try SWIM.Member(fromProto: proto, context: context)
             }
-            self = .membership(members as! [SWIM.Member<Peer>])  // as!-safe, since Peer always is SWIMActor in this implementation
+            self = .membership(members)
         }
     }
 }
@@ -94,22 +93,17 @@ extension SWIM.Member: @retroactive Decodable, @retroactive Encodable, _Protobuf
 
     public func toProto(context: Serialization.Context) throws -> _ProtoSWIMMember {
         var proto = _ProtoSWIMMember()
-        guard let peer = self.peer as? SWIMActor else {
-            throw SerializationError(.unableToSerialize(hint: "Expected peer to be \(SWIMActor.self) but was \(self.peer)!"))
-        }
-        proto.id = try peer.id.toProto(context: context)
+        proto.node = try self.node.toProto(context: context)
         proto.status = try self.status.toProto(context: context)
         proto.protocolPeriod = self.protocolPeriod
         return proto
     }
 
     public init(fromProto proto: _ProtoSWIMMember, context: Serialization.Context) throws {
-        precondition(Peer.self == SWIMActor.self)
-        let id = try ActorID(fromProto: proto.id, context: context)
-        let peer = try SWIMActor.resolve(id: id, using: context.system)
+        let node = try ClusterMembership.Node(fromProto: proto.node, context: context)
         let status = try SWIM.Status(fromProto: proto.status, context: context)
         let protocolPeriod = proto.protocolPeriod
-        self.init(peer: peer as! Peer, status: status, protocolPeriod: protocolPeriod)  // as!-safe since we only deal with Actor impls
+        self.init(node: node, status: status, protocolPeriod: protocolPeriod)
     }
 }
 
@@ -121,20 +115,14 @@ extension SWIM.PingResponse: @retroactive Decodable, @retroactive Encodable, _Pr
         switch self {
         case .ack(let target, let incarnation, let payload, let sequenceNumber):
             var ack = _ProtoSWIMPingResponse.Ack()
-            guard let target = target as? SWIMActor else {
-                throw SerializationError(.unableToSerialize(hint: "Can't serialize SWIM target as \(SWIMActor.self), was: \(target)"))
-            }
-            ack.target = try target.id.toProto(context: context)
+            ack.target = try target.toProto(context: context)
             ack.incarnation = incarnation
             ack.payload = try payload.toProto(context: context)
             ack.sequenceNumber = sequenceNumber
             proto.ack = ack
         case .nack(let target, let sequenceNumber):
             var nack = _ProtoSWIMPingResponse.Nack()
-            guard let target = target as? SWIMActor else {
-                throw SerializationError(.unableToSerialize(hint: "Can't serialize SWIM target as \(SWIMActor.self), was: \(target)"))
-            }
-            nack.target = try target.id.toProto(context: context)
+            nack.target = try target.toProto(context: context)
             nack.sequenceNumber = sequenceNumber
             proto.nack = nack
         case .timeout:
@@ -144,25 +132,20 @@ extension SWIM.PingResponse: @retroactive Decodable, @retroactive Encodable, _Pr
     }
 
     public init(fromProto proto: _ProtoSWIMPingResponse, context: Serialization.Context) throws {
-        precondition(Peer.self == SWIMActor.self)
         guard let pingResponse = proto.pingResponse else {
-            throw SerializationError(.missingField("pingResponse", type: String(describing: SWIM.PingResponse<SWIMActor, SWIMActor>.self)))
+            throw SerializationError(.missingField("pingResponse", type: String(describing: SWIM.PingResponse.self)))
         }
         switch pingResponse {
         case .ack(let ack):
-            let targetID = try ActorID(fromProto: ack.target, context: context)
-            let target = try SWIMActor.resolve(id: targetID, using: context.system)
-            let targetPeer = target as! Peer  // as!-safe, since we only ever deal with Actor
-            let payload = try SWIM.GossipPayload<Peer>(fromProto: ack.payload, context: context)
+            let target = try ClusterMembership.Node(fromProto: ack.target, context: context)
+            let payload = try SWIM.GossipPayload(fromProto: ack.payload, context: context)
             let sequenceNumber = ack.sequenceNumber
-            self = .ack(target: targetPeer, incarnation: ack.incarnation, payload: payload, sequenceNumber: sequenceNumber)
+            self = .ack(target: target, incarnation: ack.incarnation, payload: payload, sequenceNumber: sequenceNumber)
 
         case .nack(let nack):
-            let targetID = try ActorID(fromProto: nack.target, context: context)
-            let target = try SWIMActor.resolve(id: targetID, using: context.system)
-            let targetPeer = target as! Peer  // as!-safe, since we only ever deal with Actor impls
+            let target = try ClusterMembership.Node(fromProto: nack.target, context: context)
             let sequenceNumber = nack.sequenceNumber
-            self = .nack(target: targetPeer, sequenceNumber: sequenceNumber)
+            self = .nack(target: target, sequenceNumber: sequenceNumber)
         }
     }
 }
@@ -193,8 +176,8 @@ extension ClusterMembership.Node: @retroactive Decodable, @retroactive Encodable
         let protoNode: _ProtoClusterEndpoint = proto.endpoint
         let `protocol` = protoNode.protocol
         let name: String?
-        if protoNode.protocol != "" {
-            name = protoNode.protocol
+        if protoNode.system != "" {
+            name = protoNode.system
         } else {
             name = nil
         }

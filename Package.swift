@@ -189,7 +189,8 @@ var dependencies: [Package.Dependency] = [
 
     // .package(url: "https://github.com/apple/swift-cluster-membership", from: "0.3.0"),
     //    .package(name: "swift-cluster-membership", path: "Packages/swift-cluster-membership"), // FIXME: just work in progress
-    .package(url: "https://github.com/apple/swift-cluster-membership", branch: "main"),
+    // FIXME: revert changes back when swift-cluster-membership is merged
+    .package(url: "https://github.com/akbashev/swift-cluster-membership", branch: "remove_protocols"),
 
     .package(url: "https://github.com/apple/swift-nio", from: "2.61.1"),
     .package(url: "https://github.com/apple/swift-nio-extras", from: "1.20.0"),

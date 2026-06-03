@@ -65,7 +65,7 @@ final class ActorMetricsSWIMActorPeerMetricsTests: ClusteredActorSystemsXCTestCa
 
         _ = await origin.whenLocal { __secretlyKnownToBeLocal in  // TODO(distributed): rename once https://github.com/apple/swift/pull/42098 is implemented
             await __secretlyKnownToBeLocal.sendPing(
-                to: targetPeer,
+                to: target.swimNode,
                 payload: .none,
                 pingRequestOrigin: nil,
                 pingRequestSequenceNumber: nil,
@@ -116,11 +116,11 @@ final class ActorMetricsSWIMActorPeerMetricsTests: ClusteredActorSystemsXCTestCa
         let targetPeer = try SWIMActor.resolve(id: target.id._asRemote, using: originNode)
         let throughPeer = try SWIMActor.resolve(id: through.id._asRemote, using: originNode)
 
-        let directive = SWIM.Instance<SWIMActor, SWIMActor, SWIMActor>.SendPingRequestDirective(
-            target: targetPeer,
+        let directive = SWIM.Instance.SendPingRequestDirective(
+            target: target.swimNode,
             timeout: .seconds(1),
             requestDetails: [
-                .init(peerToPingRequestThrough: throughPeer, payload: .none, sequenceNumber: 1)
+                .init(peerToPingRequestThrough: through.swimNode, payload: .none, sequenceNumber: 1)
             ]
         )
 

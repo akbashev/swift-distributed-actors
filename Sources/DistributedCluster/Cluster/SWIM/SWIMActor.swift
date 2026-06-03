@@ -149,7 +149,7 @@ internal distributed actor SWIMActor: CustomStringConvertible {
         self.metrics.shell.messageOutboundCount.increment()
 
         do {
-            let pingResponse = try await targetPeer.ping(payload: payload, from: self, timeout: timeout, sequenceNumber: sequenceNumber)
+            let pingResponse = try await targetPeer.ping(payload: payload, from: self.swimNode, timeout: timeout, sequenceNumber: sequenceNumber)
             self.metrics.shell.pingResponseTime.recordInterval(since: pingSentAt)
             return self.handlePingResponse(
                 response: pingResponse,
@@ -202,11 +202,10 @@ internal distributed actor SWIMActor: CustomStringConvertible {
 
                     do {
                         let peerToPingRequestThroughActor = peerToPingRequestThrough.swimShell(self.actorSystem)
-                        let peerToPingActor = peerToPing.swimShell(self.actorSystem)
                         let response = try await peerToPingRequestThroughActor.pingRequest(
-                            target: peerToPingActor,
+                            target: peerToPing,
                             payload: payload,
-                            from: self,
+                            from: self.swimNode,
                             timeout: pingTimeout,
                             sequenceNumber: sequenceNumber
                         )
@@ -428,7 +427,7 @@ internal distributed actor SWIMActor: CustomStringConvertible {
 
     nonisolated func ping(
         payload: SWIM.GossipPayload,
-        from pingOrigin: SWIMActor,
+        from pingOrigin: ClusterMembership.Node,
         timeout: Duration,
         sequenceNumber: SWIM.SequenceNumber
     ) async throws -> SWIM.PingResponse {
@@ -442,14 +441,14 @@ internal distributed actor SWIMActor: CustomStringConvertible {
     }
 
     distributed func ping(
-        origin: SWIMActor,
+        origin: ClusterMembership.Node,
         payload: SWIM.GossipPayload,
         sequenceNumber: SWIM.SequenceNumber
     ) async throws -> SWIM.PingResponse {
         self.log.trace(
             "Received ping@\(sequenceNumber)",
             metadata: self.swim.metadata([
-                "swim/ping/origin": "\(origin.id)",
+                "swim/ping/origin": "\(origin)",
                 "swim/ping/payload": "\(payload)",
                 "swim/ping/seqNr": "\(sequenceNumber)",
             ])
@@ -457,7 +456,7 @@ internal distributed actor SWIMActor: CustomStringConvertible {
         self.metrics.shell.messageInboundCount.increment()
 
         for directive in self.swim.onPing(
-            pingOrigin: origin.swimNode,
+            pingOrigin: origin,
             payload: payload,
             sequenceNumber: sequenceNumber
         ) {
@@ -476,9 +475,9 @@ internal distributed actor SWIMActor: CustomStringConvertible {
     }
 
     nonisolated func pingRequest(
-        target: SWIMActor,
+        target: ClusterMembership.Node,
         payload: SWIM.GossipPayload,
-        from pingRequestOrigin: SWIMActor,
+        from pingRequestOrigin: ClusterMembership.Node,
         timeout: Duration,
         sequenceNumber: SWIM.SequenceNumber
     ) async throws -> SWIM.PingResponse {
@@ -493,8 +492,8 @@ internal distributed actor SWIMActor: CustomStringConvertible {
     }
 
     distributed func pingRequest(
-        target: SWIMActor,
-        pingRequestOrigin: SWIMActor,
+        target: ClusterMembership.Node,
+        pingRequestOrigin: ClusterMembership.Node,
         payload: SWIM.GossipPayload,
         sequenceNumber pingRequestSequenceNumber: SWIM.SequenceNumber
     ) async throws -> SWIM.PingResponse {
@@ -509,8 +508,8 @@ internal distributed actor SWIMActor: CustomStringConvertible {
         self.metrics.shell.messageInboundCount.increment()
 
         for directive in self.swim.onPingRequest(
-            target: target.swimNode,
-            pingRequestOrigin: pingRequestOrigin.swimNode,
+            target: target,
+            pingRequestOrigin: pingRequestOrigin,
             payload: payload,
             sequenceNumber: pingRequestSequenceNumber
         ) {

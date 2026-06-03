@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Atomics
+import ClusterMembership
 import Distributed
 import DistributedActorsConcurrencyHelpers  // for TimeSource
 import DistributedActorsTestKit
@@ -104,7 +105,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         }
 
         let originPeer = try SWIMActor.resolve(id: second.id._asRemote, using: firstNode)
-        let response = try await first.ping(origin: originPeer, payload: .none, sequenceNumber: 13)
+        let response = try await first.ping(origin: originPeer.swimNode, payload: .none, sequenceNumber: 13)
 
         guard case .ack(let pinged, let incarnation, _, _) = response else {
             throw testKit(firstNode).fail("Expected ack, but got \(response)")
@@ -143,7 +144,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         let originPeer = try SWIMActor.resolve(id: first.id._asRemote, using: secondNode)
         let targetPeer = try SWIMActor.resolve(id: third.id._asRemote, using: secondNode)
         // `first` pings `third` through `second`. `third` is down so `second` will return nack for ping request.
-        let response = try await second.pingRequest(target: targetPeer, pingRequestOrigin: originPeer, payload: .none, sequenceNumber: 13)
+        let response = try await second.pingRequest(target: targetPeer.swimNode, pingRequestOrigin: originPeer.swimNode, payload: .none, sequenceNumber: 13)
 
         guard case .nack = response else {
             throw testKit(firstNode).fail("Expected nack, but got \(response)")
@@ -213,7 +214,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         let originPeer = try SWIMActor.resolve(id: first.id._asRemote, using: secondNode)
         let targetPeer = try SWIMActor.resolve(id: third.id._asRemote, using: secondNode)
         // `first` pings `third` through `second`
-        let response = try await second.pingRequest(target: targetPeer, pingRequestOrigin: originPeer, payload: .none, sequenceNumber: 13)
+        let response = try await second.pingRequest(target: targetPeer.swimNode, pingRequestOrigin: originPeer.swimNode, payload: .none, sequenceNumber: 13)
 
         guard case .ack(let pinged, let incarnation, _, _) = response else {
             throw testKit(firstNode).fail("Expected ack, but got \(response)")
@@ -341,7 +342,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
 
         let suspectStatus: SWIM.Status = .suspect(incarnation: 0, suspectedBy: [first.swimNode])
 
-        _ = try await first.ping(origin: originPeer, payload: .membership([SWIM.Member(node: targetPeer.swimNode, status: suspectStatus, protocolPeriod: 0)]), sequenceNumber: 1)
+        _ = try await first.ping(origin: originPeer.swimNode, payload: .membership([SWIM.Member(node: targetPeer.swimNode, status: suspectStatus, protocolPeriod: 0)]), sequenceNumber: 1)
 
         try await self.awaitStatus(suspectStatus, for: targetPeer, on: first, within: .seconds(1))
         timeSource.tick()
@@ -386,7 +387,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         try await self.configureSWIM(for: first, members: [second])
 
         let secondPeer = try SWIMActor.resolve(id: second.id._asRemote, using: firstNode)
-        let response = try await first.ping(origin: secondPeer, payload: .none, sequenceNumber: 1)
+        let response = try await first.ping(origin: secondPeer.swimNode, payload: .none, sequenceNumber: 1)
 
         guard case .ack(_, _, .membership(let members), _) = response else {
             throw testKit(firstNode).fail("Expected gossip with membership, but got \(response)")

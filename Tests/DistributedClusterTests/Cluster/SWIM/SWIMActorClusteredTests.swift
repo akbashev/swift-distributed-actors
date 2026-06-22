@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Atomics
+import ClusterMembership
 import Distributed
 import DistributedActorsConcurrencyHelpers  // for TimeSource
 import DistributedActorsTestKit
@@ -104,13 +105,13 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         }
 
         let originPeer = try SWIMActor.resolve(id: second.id._asRemote, using: firstNode)
-        let response = try await first.ping(origin: originPeer, payload: .none, sequenceNumber: 13)
+        let response = try await first.ping(origin: originPeer.swimNode, payload: .none, sequenceNumber: 13)
 
         guard case .ack(let pinged, let incarnation, _, _) = response else {
             throw testKit(firstNode).fail("Expected ack, but got \(response)")
         }
 
-        pinged.shouldEqual(first)
+        pinged.shouldEqual(first.swimNode)
         incarnation.shouldEqual(0)
     }
 
@@ -143,7 +144,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         let originPeer = try SWIMActor.resolve(id: first.id._asRemote, using: secondNode)
         let targetPeer = try SWIMActor.resolve(id: third.id._asRemote, using: secondNode)
         // `first` pings `third` through `second`. `third` is down so `second` will return nack for ping request.
-        let response = try await second.pingRequest(target: targetPeer, pingRequestOrigin: originPeer, payload: .none, sequenceNumber: 13)
+        let response = try await second.pingRequest(target: targetPeer.swimNode, pingRequestOrigin: originPeer.swimNode, payload: .none, sequenceNumber: 13)
 
         guard case .nack = response else {
             throw testKit(firstNode).fail("Expected nack, but got \(response)")
@@ -213,13 +214,13 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         let originPeer = try SWIMActor.resolve(id: first.id._asRemote, using: secondNode)
         let targetPeer = try SWIMActor.resolve(id: third.id._asRemote, using: secondNode)
         // `first` pings `third` through `second`
-        let response = try await second.pingRequest(target: targetPeer, pingRequestOrigin: originPeer, payload: .none, sequenceNumber: 13)
+        let response = try await second.pingRequest(target: targetPeer.swimNode, pingRequestOrigin: originPeer.swimNode, payload: .none, sequenceNumber: 13)
 
         guard case .ack(let pinged, let incarnation, _, _) = response else {
             throw testKit(firstNode).fail("Expected ack, but got \(response)")
         }
 
-        pinged.shouldEqual(third)
+        pinged.shouldEqual(third.swimNode)
         incarnation.shouldEqual(0)
     }
 
@@ -248,13 +249,13 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         // Fake a failed ping
         _ = await first.whenLocal { __secretlyKnownToBeLocal in  // TODO(distributed): rename once https://github.com/apple/swift/pull/42098 is implemented
             _ = __secretlyKnownToBeLocal.handlePingResponse(
-                response: .timeout(target: targetPeer, pingRequestOrigin: nil, timeout: .milliseconds(100), sequenceNumber: 13),
+                response: .timeout(target: targetPeer.swimNode, pingRequestOrigin: nil, timeout: .milliseconds(100), sequenceNumber: 13),
                 pingRequestOrigin: nil,
                 pingRequestSequenceNumber: nil
             )
         }
 
-        try await self.awaitStatus(.suspect(incarnation: 0, suspectedBy: [first.node]), for: targetPeer, on: first, within: .seconds(1))
+        try await self.awaitStatus(.suspect(incarnation: 0, suspectedBy: [first.swimNode]), for: targetPeer, on: first, within: .seconds(1))
     }
 
     func test_swim_shouldMarkSuspects_whenPingFailsAndRequestedNodesFailToPing() async throws {
@@ -282,19 +283,19 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         _ = await first.whenLocal { __secretlyKnownToBeLocal in  // TODO(distributed): rename once https://github.com/apple/swift/pull/42098 is implemented
             // `first` got .timeout when pinging `third`, so it sends ping request to `second` for `three`
             _ = __secretlyKnownToBeLocal.handlePingResponse(
-                response: .timeout(target: targetPeer, pingRequestOrigin: nil, timeout: .milliseconds(100), sequenceNumber: 13),
+                response: .timeout(target: targetPeer.swimNode, pingRequestOrigin: nil, timeout: .milliseconds(100), sequenceNumber: 13),
                 pingRequestOrigin: nil,
                 pingRequestSequenceNumber: nil
             )
             // `first` got .timeout from `second` for ping request
             __secretlyKnownToBeLocal.handlePingRequestResponse(
-                response: .timeout(target: targetPeer, pingRequestOrigin: first, timeout: .milliseconds(100), sequenceNumber: 5),
-                pinged: throughPeer
+                response: .timeout(target: targetPeer.swimNode, pingRequestOrigin: first.swimNode, timeout: .milliseconds(100), sequenceNumber: 5),
+                pinged: throughPeer.swimNode
             )
         }
 
         // eventually it will ping/pingRequest and as all the pings (supposedly) time out it should mark as suspect
-        try await self.awaitStatus(.suspect(incarnation: 0, suspectedBy: [first.node]), for: targetPeer, on: first, within: .seconds(1))
+        try await self.awaitStatus(.suspect(incarnation: 0, suspectedBy: [first.swimNode]), for: targetPeer, on: first, within: .seconds(1))
     }
 
     func test_swim_shouldNotMarkUnreachable_whenSuspectedByNotEnoughNodes_whenMinTimeoutReached() async throws {
@@ -339,9 +340,9 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         //         try self.expectPing(on: probeOnSecond, reply: false)
         timeSource.tick()
 
-        let suspectStatus: SWIM.Status = .suspect(incarnation: 0, suspectedBy: [first.node])
+        let suspectStatus: SWIM.Status = .suspect(incarnation: 0, suspectedBy: [first.swimNode])
 
-        _ = try await first.ping(origin: originPeer, payload: .membership([SWIM.Member(peer: targetPeer, status: suspectStatus, protocolPeriod: 0)]), sequenceNumber: 1)
+        _ = try await first.ping(origin: originPeer.swimNode, payload: .membership([SWIM.Member(node: targetPeer.swimNode, status: suspectStatus, protocolPeriod: 0)]), sequenceNumber: 1)
 
         try await self.awaitStatus(suspectStatus, for: targetPeer, on: first, within: .seconds(1))
         timeSource.tick()
@@ -386,15 +387,15 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         try await self.configureSWIM(for: first, members: [second])
 
         let secondPeer = try SWIMActor.resolve(id: second.id._asRemote, using: firstNode)
-        let response = try await first.ping(origin: secondPeer, payload: .none, sequenceNumber: 1)
+        let response = try await first.ping(origin: secondPeer.swimNode, payload: .none, sequenceNumber: 1)
 
         guard case .ack(_, _, .membership(let members), _) = response else {
             throw testKit(firstNode).fail("Expected gossip with membership, but got \(response)")
         }
 
         members.count.shouldEqual(2)
-        members.shouldContain(where: { $0.peer == secondPeer && $0.status == .alive(incarnation: 0) })
-        members.shouldContain(where: { $0.peer == first && $0.status == .alive(incarnation: 0) })
+        members.shouldContain(where: { $0.node == secondPeer.swimNode && $0.status == .alive(incarnation: 0) })
+        members.shouldContain(where: { $0.node == first.swimNode && $0.status == .alive(incarnation: 0) })
     }
 
     func test_SWIMShell_shouldMonitorJoinedClusterMembers() async throws {
@@ -429,8 +430,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
         try await swimShell.whenLocal { __secretlyKnownToBeLocal in  // TODO(distributed): rename once https://github.com/apple/swift/pull/42098 is implemented
             try __secretlyKnownToBeLocal._configureSWIM { swim in
                 for (member, status) in members {
-                    let member = try SWIMActor.resolve(id: member.id._asRemote, using: swimShell.actorSystem)
-                    _ = swim.addMember(member, status: status)
+                    _ = swim.addMember(member.swimNode, status: status)
                 }
             }
         }
@@ -473,7 +473,7 @@ final class SWIMActorClusteredTests: ClusteredActorSystemsXCTestCase {
 
             let otherStatus =
                 membership
-                .first(where: { $0.peer == peer })
+                .first(where: { $0.node == peer.swimNode })
                 .map(\.status)
 
             guard otherStatus == status else {

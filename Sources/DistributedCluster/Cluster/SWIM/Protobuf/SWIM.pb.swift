@@ -70,8 +70,8 @@ public nonisolated struct _ProtoSWIMPingResponse: Sendable {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    public var target: _ProtoActorID {
-      get {_target ?? _ProtoActorID()}
+    public var target: _ProtoClusterNode {
+      get {_target ?? _ProtoClusterNode()}
       set {_target = newValue}
     }
     /// Returns true if `target` has been explicitly set.
@@ -96,7 +96,7 @@ public nonisolated struct _ProtoSWIMPingResponse: Sendable {
 
     public init() {}
 
-    fileprivate var _target: _ProtoActorID? = nil
+    fileprivate var _target: _ProtoClusterNode? = nil
     fileprivate var _payload: _ProtoSWIMGossipPayload? = nil
   }
 
@@ -105,8 +105,8 @@ public nonisolated struct _ProtoSWIMPingResponse: Sendable {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    public var target: _ProtoActorID {
-      get {_target ?? _ProtoActorID()}
+    public var target: _ProtoClusterNode {
+      get {_target ?? _ProtoClusterNode()}
       set {_target = newValue}
     }
     /// Returns true if `target` has been explicitly set.
@@ -120,7 +120,7 @@ public nonisolated struct _ProtoSWIMPingResponse: Sendable {
 
     public init() {}
 
-    fileprivate var _target: _ProtoActorID? = nil
+    fileprivate var _target: _ProtoClusterNode? = nil
   }
 
   public init() {}
@@ -193,14 +193,14 @@ public nonisolated struct _ProtoSWIMMember: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: _ProtoActorID {
-    get {_id ?? _ProtoActorID()}
-    set {_id = newValue}
+  public var node: _ProtoClusterNode {
+    get {_node ?? _ProtoClusterNode()}
+    set {_node = newValue}
   }
-  /// Returns true if `id` has been explicitly set.
-  public var hasID: Bool {self._id != nil}
-  /// Clears the value of `id`. Subsequent reads from it will return its default value.
-  public mutating func clearID() {self._id = nil}
+  /// Returns true if `node` has been explicitly set.
+  public var hasNode: Bool {self._node != nil}
+  /// Clears the value of `node`. Subsequent reads from it will return its default value.
+  public mutating func clearNode() {self._node = nil}
 
   public var status: _ProtoSWIMStatus {
     get {_status ?? _ProtoSWIMStatus()}
@@ -217,7 +217,7 @@ public nonisolated struct _ProtoSWIMMember: Sendable {
 
   public init() {}
 
-  fileprivate var _id: _ProtoActorID? = nil
+  fileprivate var _node: _ProtoClusterNode? = nil
   fileprivate var _status: _ProtoSWIMStatus? = nil
 }
 
@@ -436,7 +436,7 @@ nonisolated extension _ProtoSWIMStatus.TypeEnum: SwiftProtobuf._ProtoNameProvidi
 
 nonisolated extension _ProtoSWIMMember: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = "SWIMMember"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}status\0\u{1}protocolPeriod\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}node\0\u{1}status\0\u{1}protocolPeriod\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -444,7 +444,7 @@ nonisolated extension _ProtoSWIMMember: SwiftProtobuf.Message, SwiftProtobuf._Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._id) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._node) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._status) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.protocolPeriod) }()
       default: break
@@ -457,7 +457,7 @@ nonisolated extension _ProtoSWIMMember: SwiftProtobuf.Message, SwiftProtobuf._Me
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._id {
+    try { if let v = self._node {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._status {
@@ -470,7 +470,7 @@ nonisolated extension _ProtoSWIMMember: SwiftProtobuf.Message, SwiftProtobuf._Me
   }
 
   public static func ==(lhs: _ProtoSWIMMember, rhs: _ProtoSWIMMember) -> Bool {
-    if lhs._id != rhs._id {return false}
+    if lhs._node != rhs._node {return false}
     if lhs._status != rhs._status {return false}
     if lhs.protocolPeriod != rhs.protocolPeriod {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

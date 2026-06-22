@@ -187,9 +187,7 @@ var targets: [PackageDescription.Target] = [
 var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-atomics", from: "1.1.0"),
 
-    // .package(url: "https://github.com/apple/swift-cluster-membership", from: "0.3.0"),
-    //    .package(name: "swift-cluster-membership", path: "Packages/swift-cluster-membership"), // FIXME: just work in progress
-    .package(url: "https://github.com/apple/swift-cluster-membership", branch: "main"),
+    .package(url: "https://github.com/apple/swift-cluster-membership", from: "0.4.0"),
 
     .package(url: "https://github.com/apple/swift-nio", from: "2.61.1"),
     .package(url: "https://github.com/apple/swift-nio-extras", from: "1.20.0"),

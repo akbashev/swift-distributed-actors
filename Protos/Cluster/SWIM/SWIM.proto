@@ -22,13 +22,13 @@ import "ActorID.proto";
 
 message SWIMPingResponse {
     message Ack {
-        ActorID target            = 1;
+        ClusterNode target        = 1;
         uint64 incarnation        = 2;
         SWIMGossipPayload payload = 3;
         uint32 sequenceNumber     = 4;
     }
     message Nack {
-        ActorID target        = 1;
+        ClusterNode target    = 1;
         uint32 sequenceNumber = 2;
     }
     oneof pingResponse {
@@ -52,7 +52,7 @@ message SWIMStatus {
 }
 
 message SWIMMember {
-    ActorID id            = 1;
+    ClusterNode node      = 1;
     SWIMStatus status     = 2;
     uint64 protocolPeriod = 3;
 }

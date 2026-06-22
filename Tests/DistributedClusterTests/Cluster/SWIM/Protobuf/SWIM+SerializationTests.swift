@@ -29,8 +29,8 @@ final class SWIMSerializationTests: SingleClusterSystemXCTestCase {
         }
 
         let targetPeer = try SWIMActor.resolve(id: target.id._asRemote, using: self.system)
-        let payload: SWIM.GossipPayload = .membership([.init(peer: targetPeer, status: .alive(incarnation: 0), protocolPeriod: 0)])
-        let pingReq: SWIM.PingResponse<SWIMActor, SWIMActor> = .ack(target: targetPeer, incarnation: 1, payload: payload, sequenceNumber: 13)
+        let payload: SWIM.GossipPayload = .membership([.init(node: target.swimNode, status: .alive(incarnation: 0), protocolPeriod: 0)])
+        let pingReq: SWIM.PingResponse = .ack(target: target.swimNode, incarnation: 1, payload: payload, sequenceNumber: 13)
         try self.shared_serializationRoundtrip(pingReq)
     }
 
@@ -44,7 +44,7 @@ final class SWIMSerializationTests: SingleClusterSystemXCTestCase {
         }
 
         let targetPeer = try SWIMActor.resolve(id: target.id._asRemote, using: self.system)
-        let pingReq: SWIM.PingResponse<SWIMActor, SWIMActor> = .nack(target: targetPeer, sequenceNumber: 13)
+        let pingReq: SWIM.PingResponse = .nack(target: target.swimNode, sequenceNumber: 13)
         try self.shared_serializationRoundtrip(pingReq)
     }
 

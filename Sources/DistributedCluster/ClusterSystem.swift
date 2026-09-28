@@ -1406,7 +1406,7 @@ extension ClusterSystem {
             ]
         )
 
-        let recipient = self.localCallRecipient(for: actor)
+        let recipient = try self.localCallRecipient(for: actor)
         let anyReturn = try await withCheckedThrowingContinuation { cc in
             Task { [invocation] in  // FIXME: make an async stream here since we lost ordering guarantees here
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
@@ -1438,10 +1438,14 @@ extension ClusterSystem {
     /// for example a `$Protocol` stub resolved through a `@Resolvable` protocol.
     /// Such a reference has no implementation of its own, so the call must run
     /// on the local actor with that ID, as it would had it arrived over the network.
-    private func localCallRecipient<Act>(for actor: Act) -> any DistributedActor
+    private func localCallRecipient<Act>(for actor: Act) throws -> any DistributedActor
     where Act: DistributedActor, Act.ID == ActorID {
-        guard __isRemoteActor(actor), let local = self.resolveLocalAnyDistributedActor(id: actor.id) else {
+        guard __isRemoteActor(actor), actor.id.context.remoteCallInterceptor == nil else {
             return actor
+        }
+
+        guard let local = self.resolveLocalAnyDistributedActor(id: actor.id) else {
+            throw DeadLetterError(recipient: actor.id)
         }
         return local
     }
@@ -1471,7 +1475,7 @@ extension ClusterSystem {
             ]
         )
 
-        let recipient = self.localCallRecipient(for: actor)
+        let recipient = try self.localCallRecipient(for: actor)
         _ = try await withCheckedThrowingContinuation { (cc: CheckedContinuation<Any, Error>) in
             Task { [invocation] in
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)

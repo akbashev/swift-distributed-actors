@@ -54,6 +54,21 @@ final class ResolvableProtocolTests: ClusteredActorSystemsXCTestCase {
         afterReset.shouldEqual(1)
     }
 
+    func test_resolvableStub_actorDiesAfterResolve_shouldThrowDeadLetter() async throws {
+        let system = await setUpNode("local")
+
+        var counter: ConcreteCounter? = ConcreteCounter(actorSystem: system)
+        let stub = try $ResolvableCounter.resolve(id: counter!.id, using: system)
+        counter = nil
+
+        let error = try await shouldThrow {
+            _ = try await stub.increment(by: 1)
+        }
+        guard error is DeadLetterError else {
+            throw TestError("Expected DeadLetterError, got \(error)")
+        }
+    }
+
     func test_resolvableStub_remoteActor_shouldInvokeTheRemoteActor() async throws {
         let (local, remote) = await setUpPair()
         try await joinNodes(node: local, with: remote)

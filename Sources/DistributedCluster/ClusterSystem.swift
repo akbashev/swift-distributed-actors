@@ -1406,13 +1406,14 @@ extension ClusterSystem {
             ]
         )
 
+        let recipient = self.localCallRecipient(for: actor)
         let anyReturn = try await withCheckedThrowingContinuation { cc in
             Task { [invocation] in  // FIXME: make an async stream here since we lost ordering guarantees here
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
                 let directReturnHandler = ClusterInvocationResultHandler(directReturnContinuation: cc)
 
                 try await executeDistributedTarget(
-                    on: actor,
+                    on: recipient,
                     target: target,
                     invocationDecoder: &directDecoder,
                     handler: directReturnHandler
@@ -1429,6 +1430,20 @@ extension ClusterSystem {
         }
 
         return wellTypedReturn
+    }
+
+    /// The actor a local call should execute on.
+    ///
+    /// A remote reference can carry the ID of an actor that lives on this node,
+    /// for example a `$Protocol` stub resolved through a `@Resolvable` protocol.
+    /// Such a reference has no implementation of its own, so the call must run
+    /// on the local actor with that ID, as it would had it arrived over the network.
+    private func localCallRecipient<Act>(for actor: Act) -> any DistributedActor
+    where Act: DistributedActor, Act.ID == ActorID {
+        guard __isRemoteActor(actor), let local = self.resolveLocalAnyDistributedActor(id: actor.id) else {
+            return actor
+        }
+        return local
     }
 
     /// Able to direct a `remoteCallVoid` initiated call, right into a local invocation.
@@ -1456,13 +1471,14 @@ extension ClusterSystem {
             ]
         )
 
+        let recipient = self.localCallRecipient(for: actor)
         _ = try await withCheckedThrowingContinuation { (cc: CheckedContinuation<Any, Error>) in
             Task { [invocation] in
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
                 let directReturnHandler = ClusterInvocationResultHandler(directReturnContinuation: cc)
 
                 try await executeDistributedTarget(
-                    on: actor,
+                    on: recipient,
                     target: target,
                     invocationDecoder: &directDecoder,
                     handler: directReturnHandler

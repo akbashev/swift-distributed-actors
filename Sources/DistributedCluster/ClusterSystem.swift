@@ -1406,7 +1406,7 @@ extension ClusterSystem {
             ]
         )
 
-        let recipient = try self.resolveLocalStubIfNeeded(for: actor)
+        let recipient = try self.localCallRecipient(for: actor)
         let anyReturn = try await withCheckedThrowingContinuation { cc in
             Task { [invocation] in  // FIXME: make an async stream here since we lost ordering guarantees here
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
@@ -1432,18 +1432,20 @@ extension ClusterSystem {
         return wellTypedReturn
     }
 
-    /// Resolves local stub implementations.
-    private func resolveLocalStubIfNeeded<Act>(for actor: Act) throws -> any DistributedActor
+    /// The actor a local call executes on. The given reference may be a stub (e.g. from `@Resolvable`)
+    /// that would re-enter `remoteCall`, so:
+    /// - a live local actor receives the call;
+    /// - a reference to a remote actor forwards the call to its node;
+    /// - a local actor that is no longer alive is a dead letter.
+    private func localCallRecipient<Act>(for actor: Act) throws -> any DistributedActor
     where Act: DistributedActor, Act.ID == ActorID {
-        guard Act.self is any _DistributedActorStub.Type else {
+        if let local = self.resolveLocalAnyDistributedActor(id: actor.id) {
+            return local
+        }
+        guard actor.id.node == self.cluster.node else {
             return actor
         }
-
-        guard let local = self.resolveLocalAnyDistributedActor(id: actor.id) else {
-            throw DeadLetterError(recipient: actor.id)
-        }
-
-        return local
+        throw DeadLetterError(recipient: actor.id)
     }
 
     /// Able to direct a `remoteCallVoid` initiated call, right into a local invocation.
@@ -1471,7 +1473,7 @@ extension ClusterSystem {
             ]
         )
 
-        let recipient = try self.resolveLocalStubIfNeeded(for: actor)
+        let recipient = try self.localCallRecipient(for: actor)
         _ = try await withCheckedThrowingContinuation { (cc: CheckedContinuation<Any, Error>) in
             Task { [invocation] in
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)

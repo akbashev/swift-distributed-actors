@@ -64,9 +64,12 @@ final class ResolvableProtocolTests: ClusteredActorSystemsXCTestCase {
         let error = try await shouldThrow {
             _ = try await stub.increment(by: 1)
         }
-        guard error is DeadLetterError else {
-            throw TestError("Expected DeadLetterError, got \(error)")
+        XCTAssertEqual((error as? DeadLetterError)?.recipient, stub.id)
+
+        let voidError = try await shouldThrow {
+            try await stub.reset()
         }
+        XCTAssertEqual((voidError as? DeadLetterError)?.recipient, stub.id)
     }
 
     func test_resolvableStub_remoteActor_shouldInvokeTheRemoteActor() async throws {

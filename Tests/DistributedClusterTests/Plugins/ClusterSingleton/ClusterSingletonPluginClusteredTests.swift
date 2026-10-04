@@ -74,6 +74,82 @@ final class ClusterSingletonPluginClusteredTests: ClusteredActorSystemsXCTestCas
         try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-1 Charlie!")
     }
 
+    func test_singletonByClusterLeadership_leaderWithoutPlugin_runsOnLowestHost() async throws {
+        var singletonSettings = ClusterSingletonSettings()
+        singletonSettings.allocationStrategy = .byLeadership
+
+        // Like a cluster daemon: the lowest address, so the leader, but it can't host singletons.
+        let daemon = await self.setUpNode("daemon") { settings in
+            settings.endpoint.port = 7111
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+        }
+        let second = await self.setUpNode("second") { settings in
+            settings.endpoint.port = 8222
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+        let third = await self.setUpNode("third") { settings in
+            settings.endpoint.port = 9333
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+
+        let name = "the-one"
+        let ref2 = try await second.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-2", actorSystem: actorSystem)
+        }
+        let ref3 = try await third.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-3", actorSystem: actorSystem)
+        }
+
+        second.cluster.join(endpoint: daemon.cluster.node.endpoint)
+        third.cluster.join(endpoint: daemon.cluster.node.endpoint)
+        try await self.ensureNodes(.up, on: second, within: .seconds(10), nodes: daemon.cluster.node, third.cluster.node)
+
+        // `second` is the lowest node that hosts the singleton.
+        try await self.assertSingletonRequestReply(second, singleton: ref2, greetingName: "Bob", expectedPrefix: "Hello-2 Bob!")
+        try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-2 Charlie!")
+    }
+
+    func test_singletonByClusterLeadership_proxyOnlyLeader_runsOnLowestHost() async throws {
+        var singletonSettings = ClusterSingletonSettings()
+        singletonSettings.allocationStrategy = .byLeadership
+
+        let first = await self.setUpNode("first") { settings in
+            settings.endpoint.port = 7111
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+        let second = await self.setUpNode("second") { settings in
+            settings.endpoint.port = 8222
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+        let third = await self.setUpNode("third") { settings in
+            settings.endpoint.port = 9333
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+
+        let name = "the-one"
+        // The leader only proxies the singleton.
+        let ref1 = try await first.singleton.proxy(TheSingleton.self, name: name, settings: singletonSettings)
+        let ref2 = try await second.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-2", actorSystem: actorSystem)
+        }
+        let ref3 = try await third.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-3", actorSystem: actorSystem)
+        }
+
+        first.cluster.join(endpoint: second.cluster.node.endpoint)
+        third.cluster.join(endpoint: first.cluster.node.endpoint)
+        try await self.ensureNodes(.up, on: first, within: .seconds(10), nodes: second.cluster.node, third.cluster.node)
+
+        try await self.assertSingletonRequestReply(first, singleton: ref1, greetingName: "Alice", expectedPrefix: "Hello-2 Alice!")
+        try await self.assertSingletonRequestReply(second, singleton: ref2, greetingName: "Bob", expectedPrefix: "Hello-2 Bob!")
+        try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-2 Charlie!")
+    }
+
     func test_singleton_lifecycle() async throws {
         var singletonSettings = ClusterSingletonSettings()
         singletonSettings.allocationStrategy = .byLeadership

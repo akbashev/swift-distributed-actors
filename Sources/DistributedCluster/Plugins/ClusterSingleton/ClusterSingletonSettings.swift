@@ -51,7 +51,8 @@ public struct ClusterSingletonSettings: Sendable {
 /// Singleton node allocation strategies.
 public struct ClusterSingletonAllocationStrategySettings: Sendable {
     private enum AllocationStrategy {
-        /// Singletons will run on the cluster leader. *All* nodes are potential candidates.
+        /// Singletons will run on the cluster leader, or on the lowest-address hosting node
+        /// when the leader doesn't host them.
         case byLeadership
 
         /// Custom strategy, allowing end-users to develop their own strategies
@@ -78,7 +79,8 @@ public struct ClusterSingletonAllocationStrategySettings: Sendable {
 }
 
 extension ClusterSingletonAllocationStrategySettings {
-    /// Singletons will run on the cluster leader. *All* nodes are potential candidates.
+    /// Singletons will run on the cluster leader, or on the lowest-address hosting node
+    /// when the leader doesn't host them, such as a cluster daemon or a proxy-only node.
     public static let byLeadership: ClusterSingletonAllocationStrategySettings =
         .init(allocationStrategy: .byLeadership)
 

@@ -74,6 +74,12 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
     /// `Task` for subscribing to cluster events
     private var clusterEventsSubscribeTask: Task<Void, Error>?
 
+    /// Nodes known to host this singleton, as the receptionist reports their bosses.
+    private var hosts: Set<Cluster.Node> = []
+
+    /// `Task` for following the bosses of nodes that host this singleton
+    private var hostsSubscribeTask: Task<Void, Error>?
+
     private lazy var log = Logger(actor: self)
 
     init(
@@ -96,6 +102,16 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
                     try await self.receiveClusterEvent(event)
                 }
             }
+            // Only nodes that can run the singleton check in, so allocation can avoid the others.
+            let hostsKey = Self.makeHostsKey(settings)
+            if singletonFactory != nil {
+                await system.receptionist.checkIn(self, with: hostsKey)
+            }
+            self.hostsSubscribeTask = Task {
+                for await host in await system.receptionist.listing(of: hostsKey) {
+                    try await self.receiveHost(host.id.node)
+                }
+            }
         } else {
             // Run singleton on this node if clustering is not enabled
             self.log.debug("Clustering not enabled. Taking over singleton.")
@@ -108,17 +124,34 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
         // TODO: perhaps we can figure out where `to` is next and hand over gracefully?
         //        self.handOver(to: nil)
         self.clusterEventsSubscribeTask?.cancel()
+        self.hostsSubscribeTask?.cancel()
     }
 
     private static func makeSingletonBossWellKnownName(_ settings: ClusterSingletonSettings) -> String {
         "$singletonBoss-\(settings.name)"
     }
 
+    /// The receptionist key under which the bosses of hosting nodes check in.
+    private static func makeHostsKey(_ settings: ClusterSingletonSettings) -> DistributedReception.Key<ClusterSingletonBoss<Act>> {
+        DistributedReception.Key(ClusterSingletonBoss<Act>.self, id: "$singletonHosts-\(settings.name)")
+    }
+
     private func receiveClusterEvent(_ event: Cluster.Event) async throws {
         // Feed the event to `AllocationStrategy` then forward the result to `updateTargetNode`,
         // which will determine if `targetNode` has changed and react accordingly.
-        let node = await self.allocationStrategy.onClusterEvent(event)
+        var node = await self.allocationStrategy.onClusterEvent(event)
+        // A node that's down can't host the singleton any more.
+        if case .membershipChange(let change) = event, change.status.isAtLeast(.down),
+            self.hosts.remove(change.node) != nil
+        {
+            node = await self.allocationStrategy.onHostsChange(self.hosts)
+        }
         try await self.updateTargetNode(node: node)
+    }
+
+    private func receiveHost(_ node: Cluster.Node) async throws {
+        guard self.hosts.insert(node).inserted else { return }
+        try await self.updateTargetNode(node: await self.allocationStrategy.onHostsChange(self.hosts))
     }
 
     private func updateTargetNode(node: Cluster.Node?) async throws {
@@ -131,6 +164,10 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
         self.targetNode = node
 
         switch node {
+        case selfNode where self.singletonFactory == nil:
+            // This node only proxies the singleton, so it can't take over. Calls stay
+            // buffered until allocation picks a node that hosts it.
+            self.log.debug("Allocated to this proxy-only node, waiting for a hosting node", metadata: self.metadata())
         case selfNode:
             try await self.takeOver(from: previousTargetNode)
         default:

@@ -276,8 +276,9 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
 
         // vvv~~~~~~~~~~~~~~~~~~~ all properties initialized, self can be shared ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~vvv //
 
+        // Held while the system's parts are set up, and released before plugins start: they use
+        // the system, such as its receptionist, whose accessors take this lock too.
         self.initLock.lock()
-        defer { initLock.unlock() }
 
         // serialization
         let serialization = Serialization(settings: settings, system: self)
@@ -375,6 +376,8 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
 
         // lazyCluster?.wakeUp()
         lazyNodeDeathWatcher?.wakeUp()
+
+        self.initLock.unlock()
 
         /// Starts plugins after the system is fully initialized
         await self.settings.plugins.startAll(self)

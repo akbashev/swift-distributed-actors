@@ -22,6 +22,9 @@ import struct Foundation.Data
 public struct InvocationMessage: Sendable, Codable, CustomStringConvertible {
     let callID: ClusterSystem.CallID
     let targetIdentifier: String
+    /// The mangled name of the type the call was made through: the recipient runs it only if it is
+    /// that type, or the type is a protocol's stub. `nil` when the sender couldn't name it.
+    let recipientType: String?
     let genericSubstitutions: [String]
     let arguments: [Data]
 

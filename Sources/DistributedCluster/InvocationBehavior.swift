@@ -22,11 +22,19 @@ import struct Foundation.Data
 public struct InvocationMessage: Sendable, Codable, CustomStringConvertible {
     let callID: ClusterSystem.CallID
     let targetIdentifier: String
-    /// The mangled name of the type the call was made through: the recipient runs it only if it is
-    /// that type, or the type is a protocol's stub. `nil` when the sender couldn't name it.
-    let recipientType: String?
+    /// What the call was made through: the recipient runs it only as that.
+    let recipient: Recipient
     let genericSubstitutions: [String]
     let arguments: [Data]
+
+    /// What a call was made through, which decides which actors may run it.
+    enum Recipient: Sendable, Codable, Equatable {
+        /// An actor of this type, by its name, as ``ClusterSystem/typeName(_:)`` gives it.
+        case actor(type: String)
+        /// Any actor conforming to the protocol of a `@Resolvable` stub: its target goes through
+        /// the protocol, which the actor's own type witnesses.
+        case protocolStub
+    }
 
     var target: RemoteCallTarget {
         RemoteCallTarget(targetIdentifier)

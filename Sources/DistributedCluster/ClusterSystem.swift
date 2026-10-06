@@ -1229,7 +1229,7 @@ extension ClusterSystem {
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
-                recipientType: _mangledTypeName(Act.self),
+                recipient: Self.recipient(Act.self),
                 genericSubstitutions: invocation.genericSubstitutions,
                 arguments: arguments
             )
@@ -1294,7 +1294,7 @@ extension ClusterSystem {
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
-                recipientType: _mangledTypeName(Act.self),
+                recipient: Self.recipient(Act.self),
                 genericSubstitutions: invocation.genericSubstitutions,
                 arguments: arguments
             )
@@ -1551,19 +1551,26 @@ extension ClusterSystem {
         }
     }
 
-    /// A call runs only on an actor of the type it was made through, or of a protocol whose stub
-    /// it was made through: run on any other actor, its target would be another type's method.
+    /// A call runs only as what it was made through: on an actor of that type, or, through a
+    /// protocol's stub, on an actor of the protocol. Run on any other actor, its target would be
+    /// another type's method.
     private func checkRecipient(_ actor: any DistributedActor, id: ActorID, of invocation: InvocationMessage) throws {
-        guard let name = invocation.recipientType else {
-            self.log.warning("Call has no recipient type, so it can't be checked: \(invocation)")
-            return
+        guard case .actor(let expected) = invocation.recipient else { return }
+        let found = Self.typeName(type(of: actor))
+        guard found == expected else {
+            throw ResolveError(.typeMismatch(id, expected: expected, found: found))
         }
-        guard let expected = _typeByName(name) else {
-            throw ResolveError(.typeMismatch(id, expected: name, found: "\(type(of: actor))"))
-        }
-        guard Self.isStub(expected) || ObjectIdentifier(type(of: actor)) == ObjectIdentifier(expected) else {
-            throw ResolveError(.typeMismatch(id, expected: "\(expected)", found: "\(type(of: actor))"))
-        }
+    }
+
+    /// What a call made through `type` says it was made through.
+    static func recipient(_ type: Any.Type) -> InvocationMessage.Recipient {
+        Self.isStub(type) ? .protocolStub : .actor(type: Self.typeName(type))
+    }
+
+    /// A type's name as both ends of a call give it: its mangled name, which tells apart types
+    /// that read the same, such as two `private` ones.
+    static func typeName(_ type: Any.Type) -> String {
+        _mangledTypeName(type) ?? _typeName(type, qualified: true)
     }
 
     /// Whether `type` is a protocol's stub, from `@Resolvable`, or the cluster's own.

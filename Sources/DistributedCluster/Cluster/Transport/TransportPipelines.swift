@@ -654,6 +654,17 @@ private final class UserMessageHandler: ChannelInboundHandler {
             } catch {
                 self.system.log.error("Failed to deserialize [\(InvocationMessage.self)]: \(error)")
             }
+        case .some(is RemoteCallCancellation.Type):
+            do {
+                let cancellation = try self.serializationPool.serialization.deserialize(
+                    as: RemoteCallCancellation.self,
+                    from: wireEnvelope.payload,
+                    using: wireEnvelope.manifest
+                )
+                self.system.receiveCancellation(cancellation)
+            } catch {
+                self.system.log.error("Failed to deserialize [\(RemoteCallCancellation.self)]: \(error)")
+            }
         case .some(is any AnyRemoteCallReply.Type):
             do {
                 let reply = try self.serializationPool.serialization.deserialize(as: (any AnyRemoteCallReply).self, from: wireEnvelope.payload, using: wireEnvelope.manifest)

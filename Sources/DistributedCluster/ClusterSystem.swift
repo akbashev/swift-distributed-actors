@@ -23,6 +23,8 @@ import Logging
 import NIO
 import NIOPosix
 
+import struct NIOConcurrencyHelpers.NIOLockedValueBox
+
 /// A `ClusterSystem` is a confined space which runs and manages Actors.
 ///
 /// Most applications need _no-more-than_ a single `ClusterSystem`.
@@ -95,6 +97,8 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
 
     private let inFlightCallLock = Lock()
     private var _inFlightCalls: [CallID: CheckedContinuation<any AnyRemoteCallReply, Error>] = [:]
+    /// The calls from other nodes running here, by their ID: what a caller's cancellation cancels.
+    private let inboundCalls = NIOLockedValueBox<[CallID: Task<Void, Never>]>([:])
 
     // ==== ----------------------------------------------------------------------------------------------------------------
     // MARK: Receptionist
@@ -1291,7 +1295,11 @@ extension ClusterSystem {
         let recipient = _RemoteClusterActorPersonality<InvocationMessage>(shell: clusterShell, id: id._asRemote, system: self)
         let arguments = invocation.arguments
 
-        let reply: RemoteCallReply<Res> = try await self.withCallID(on: id, target: target) { callID in
+        let reply: RemoteCallReply<Res> = try await self.withCallID(
+            on: id,
+            target: target,
+            sendingTo: recipient
+        ) { callID in
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
@@ -1366,7 +1374,11 @@ extension ClusterSystem {
         let recipient = _RemoteClusterActorPersonality<InvocationMessage>(shell: clusterShell, id: id._asRemote, system: self)
         let arguments = invocation.arguments
 
-        let reply: RemoteCallReply<_Done> = try await self.withCallID(on: id, target: target) { callID in
+        let reply: RemoteCallReply<_Done> = try await self.withCallID(
+            on: id,
+            target: target,
+            sendingTo: recipient
+        ) { callID in
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
@@ -1385,6 +1397,7 @@ extension ClusterSystem {
     private func withCallID<Reply>(
         on actorID: ActorID,
         target: RemoteCallTarget,
+        sendingTo recipient: _RemoteClusterActorPersonality<InvocationMessage>,
         body: (CallID) -> Void
     ) async throws -> Reply
     where Reply: AnyRemoteCallReply {
@@ -1432,11 +1445,19 @@ extension ClusterSystem {
             timeoutTask.cancel()
         }
 
-        let reply: any AnyRemoteCallReply = try await withCheckedThrowingContinuation { continuation in
-            self.inFlightCallLock.withLock {
-                self._inFlightCalls[callID] = continuation  // this is to be resumed from an incoming reply or timeout
+        // The caller's cancellation goes to the node running the call, which cancels it there; its
+        // reply comes back as usual, with what the call ended with.
+        let call = OutboundCall()
+        let reply: any AnyRemoteCallReply = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                self.inFlightCallLock.withLock {
+                    self._inFlightCalls[callID] = continuation  // this is to be resumed from an incoming reply or timeout
+                }
+                body(callID)
+                if call.sent() { recipient.sendCancellation(of: callID) }
             }
-            body(callID)
+        } onCancel: {
+            if call.cancel() { recipient.sendCancellation(of: callID) }
         }
 
         guard let reply = reply as? Reply else {
@@ -1624,41 +1645,52 @@ extension ClusterSystem {
             return
         }
 
-        Task {
-            var decoder = ClusterInvocationDecoder(system: self, message: invocation)
+        // Kept by its ID while it runs, for its caller's cancellation to reach.
+        let callID = invocation.callID
+        self.inboundCalls.withLockedValue { calls in
+            calls[callID] = Task {
+                defer { self.inboundCalls.withLockedValue { _ = $0.removeValue(forKey: callID) } }
+                var decoder = ClusterInvocationDecoder(system: self, message: invocation)
 
-            let target = invocation.target
-            let resultHandler = ClusterInvocationResultHandler(
-                system: self,
-                callID: invocation.callID,
-                channel: channel,
-                recipient: recipient
-            )
-
-            do {
-                guard let actor = self.resolveLocalAnyDistributedActor(id: recipient) else {
-                    self.deadLetters.tell(DeadLetter(invocation, recipient: recipient))
-                    throw DeadLetterError(recipient: recipient)
-                }
-                if let made = invocation.recipient {
-                    try self.checkRecipient(actor, id: recipient, as: made)
-                }
-
-                try await executeDistributedTarget(
-                    on: actor,
-                    target: target,
-                    invocationDecoder: &decoder,
-                    handler: resultHandler
+                let target = invocation.target
+                let resultHandler = ClusterInvocationResultHandler(
+                    system: self,
+                    callID: invocation.callID,
+                    channel: channel,
+                    recipient: recipient
                 )
-            } catch {
-                // FIXME(distributed): is this right?
+
                 do {
-                    try await resultHandler.onThrow(error: error)
+                    guard let actor = self.resolveLocalAnyDistributedActor(id: recipient) else {
+                        self.deadLetters.tell(DeadLetter(invocation, recipient: recipient))
+                        throw DeadLetterError(recipient: recipient)
+                    }
+                    if let made = invocation.recipient {
+                        try self.checkRecipient(actor, id: recipient, as: made)
+                    }
+
+                    try await executeDistributedTarget(
+                        on: actor,
+                        target: target,
+                        invocationDecoder: &decoder,
+                        handler: resultHandler
+                    )
                 } catch {
-                    self.log.warning("Unable to invoke result handler for \(invocation.target) call, error: \(error)")
+                    // FIXME(distributed): is this right?
+                    do {
+                        try await resultHandler.onThrow(error: error)
+                    } catch {
+                        self.log.warning("Unable to invoke result handler for \(invocation.target) call, error: \(error)")
+                    }
                 }
             }
         }
+    }
+
+    /// A caller's cancellation of a call running here: its task is cancelled, and its reply goes
+    /// back as usual. A call that's ended has nothing to cancel.
+    func receiveCancellation(_ cancellation: RemoteCallCancellation) {
+        self.inboundCalls.withLockedValue { $0[cancellation.callID] }?.cancel()
     }
 
     /// A call runs only as what it was made through: on an actor of that type, or, through a
@@ -2099,5 +2131,33 @@ public enum RemoteCall {
     @discardableResult
     public static func with<Response>(timeout: Duration, remoteCall: () async throws -> Response) async rethrows -> Response {
         try await Self.$timeout.withValue(timeout, operation: remoteCall)
+    }
+}
+
+/// An outgoing call, as its caller's cancellation sees it: whether the call has gone out yet, and
+/// whether its caller cancelled it. A cancellation is sent once the call has gone, so it never
+/// arrives before it.
+private final class OutboundCall: Sendable {
+    private struct State {
+        var sent = false
+        var cancelled = false
+    }
+
+    private let state = NIOLockedValueBox(State())
+
+    /// The call went out: whether it was cancelled before, which is sent now.
+    func sent() -> Bool {
+        self.state.withLockedValue { state in
+            state.sent = true
+            return state.cancelled
+        }
+    }
+
+    /// The caller cancelled it: whether it went out already, which is sent now.
+    func cancel() -> Bool {
+        self.state.withLockedValue { state in
+            state.cancelled = true
+            return state.sent
+        }
     }
 }

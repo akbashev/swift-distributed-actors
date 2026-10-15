@@ -61,6 +61,16 @@ public struct InvocationMessage: Sendable, Codable, CustomStringConvertible {
     }
 }
 
+/// A caller's cancellation of its call, sent to the node running it: the call's task there is
+/// cancelled, as a local call's is, and its reply comes back as usual.
+public struct RemoteCallCancellation: Sendable, Codable, CustomStringConvertible {
+    let callID: ClusterSystem.CallID
+
+    public var description: String {
+        "RemoteCallCancellation(callID: \(callID))"
+    }
+}
+
 // FIXME(distributed): remove [#957](https://github.com/apple/swift-distributed-actors/issues/957)
 enum InvocationBehavior {
     static func behavior(instance weakInstance: WeakLocalRef<some DistributedActor>) -> _Behavior<InvocationMessage> {

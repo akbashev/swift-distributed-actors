@@ -73,6 +73,7 @@ public class Serialization {
         var settings = systemSettings.serialization
 
         settings.register(InvocationMessage.self, serializerID: .foundationJSON)
+        settings.register(RemoteCallCancellation.self, serializerID: .foundationJSON)
 
         // ==== Declare mangled names of some known popular types // TODO: hardcoded mangled name until we have _mangledTypeName
         //        settings.register(Bool.self, hint: "b", serializerID: .specializedWithTypeHint)

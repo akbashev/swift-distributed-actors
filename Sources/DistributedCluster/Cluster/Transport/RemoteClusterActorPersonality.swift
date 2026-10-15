@@ -110,6 +110,14 @@ public final class _RemoteClusterActorPersonality<Message: Codable> {
         }
     }
 
+    /// Tells the node running the call `callID` that its caller cancelled it. A node that's gone
+    /// has nothing to cancel.
+    func sendCancellation(of callID: ClusterSystem.CallID) {
+        if case .association(let association) = self.association {
+            association.sendCancellation(RemoteCallCancellation(callID: callID), recipient: self.id)
+        }
+    }
+
     func sendSystemMessage(_ message: _SystemMessage, file: String = #filePath, line: UInt = #line) {
         traceLog_Cell("RemoteActorRef(\(self.id)) sendSystemMessage: \(message)")
 

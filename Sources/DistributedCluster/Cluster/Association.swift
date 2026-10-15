@@ -180,6 +180,11 @@ extension Association {
     }
 
     /// Concurrency: safe to invoke from any thread.
+    func sendCancellation(_ cancellation: RemoteCallCancellation, recipient: ActorID) {
+        self._send(TransportEnvelope(message: cancellation, recipient: recipient), promise: nil)
+    }
+
+    /// Concurrency: safe to invoke from any thread.
     func sendSystemMessage(_ message: _SystemMessage, recipient: ActorID, promise: EventLoopPromise<Void>? = nil) {
         let transportEnvelope = TransportEnvelope(systemMessage: message, recipient: recipient)
         self._send(transportEnvelope, promise: promise)

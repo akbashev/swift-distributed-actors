@@ -40,6 +40,25 @@ final class ClusterSingletonPluginTests: SingleClusterSystemXCTestCase {
         proxyReply.shouldStartWith(prefix: "Hello Charlene!")
     }
 
+    /// Plugins start while the system starts, and some host a singleton then, as virtual actors
+    /// host their router.
+    func test_singleton_hostedWhilePluginsStart() async throws {
+        let hosting = SingletonHostingPlugin()
+        let system = await setUpNode("test") { settings in
+            // Clustered, as hosting reaches the receptionist only then, and alone, so it leads.
+            settings.enabled = true
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 1)
+            settings += ClusterSingletonPlugin()
+            settings += hosting
+        }
+        system.cluster.join(endpoint: system.cluster.endpoint)
+        try await system.cluster.joined(within: .seconds(10))
+
+        let singleton = try XCTUnwrap(hosting.singleton)
+        let reply = try await singleton.greet(name: "Charlie")
+        reply.shouldStartWith(prefix: "Hello Charlie!")
+    }
+
     func test_singleton_nestedSingleton() async throws {
         let system = await setUpNode("test") { settings in
             settings += ClusterSingletonPlugin()
@@ -80,6 +99,31 @@ final class ClusterSingletonPluginTests: SingleClusterSystemXCTestCase {
 
         let id = ActorWithID(actorSystem: testNode, customID: actorID)
         await fulfillment(of: [hookFulfillment], timeout: 3.0)
+    }
+
+    /// Hosts a singleton when it starts.
+    final class SingletonHostingPlugin: Plugin, @unchecked Sendable {
+        var key: Key { "$testSingletonHosting" }
+
+        private let lock: _Mutex = .init()
+        private var _singleton: TheSingleton?
+
+        var singleton: TheSingleton? {
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            return self._singleton
+        }
+
+        func start(_ system: ClusterSystem) async throws {
+            let singleton = try await system.singleton.host(name: "the-one") { actorSystem in
+                TheSingleton(greeting: "Hello", actorSystem: actorSystem)
+            }
+            self.lock.lock()
+            self._singleton = singleton
+            self.lock.unlock()
+        }
+
+        func stop(_ system: ClusterSystem) async {}
     }
 
     final class TestActorLifecyclePlugin: ActorLifecyclePlugin {

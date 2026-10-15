@@ -1501,7 +1501,7 @@ extension ClusterSystem {
             ]
         )
 
-        let recipient = try self.localCallRecipient(for: actor)
+        let recipient = try self.localCallRecipient(for: actor, id: id)
         let anyReturn = try await withCheckedThrowingContinuation { cc in
             Task { [invocation] in  // FIXME: make an async stream here since we lost ordering guarantees here
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
@@ -1532,15 +1532,15 @@ extension ClusterSystem {
     /// - a live local actor receives the call;
     /// - a reference to a remote actor forwards the call to its node;
     /// - a local actor that is no longer alive is a dead letter.
-    private func localCallRecipient<Act>(for actor: Act) throws -> any DistributedActor
-    where Act: DistributedActor, Act.ID == ActorID {
-        if let local = self.resolveLocalAnyDistributedActor(id: actor.id) {
+    /// `id`'s actor is the recipient of a local call on `actor`, which has that ID.
+    private func localCallRecipient(for actor: any DistributedActor, id: ActorID) throws -> any DistributedActor {
+        if let local = self.resolveLocalAnyDistributedActor(id: id) {
             return local
         }
-        guard actor.id.node == self.cluster.node else {
+        guard id.node == self.cluster.node else {
             return actor
         }
-        throw DeadLetterError(recipient: actor.id)
+        throw DeadLetterError(recipient: id)
     }
 
     /// Able to direct a `remoteCallVoid` initiated call, right into a local invocation.
@@ -1583,7 +1583,7 @@ extension ClusterSystem {
             ]
         )
 
-        let recipient = try self.localCallRecipient(for: actor)
+        let recipient = try self.localCallRecipient(for: actor, id: id)
         _ = try await withCheckedThrowingContinuation { (cc: CheckedContinuation<Any, Error>) in
             Task { [invocation] in
                 var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)

@@ -72,6 +72,27 @@ final class ResolveTypeTests: ClusteredActorSystemsXCTestCase {
         let said = try await speaking.say()
         said.shouldEqual("hello")
     }
+
+    /// A node that doesn't send what a call was made through yet still reaches newer nodes.
+    func test_invocation_withoutRecipient_decodes() async throws {
+        let system = await setUpNode("local")
+        let made = InvocationMessage(
+            callID: UUID(),
+            targetIdentifier: "target",
+            recipient: .protocolStub,
+            genericSubstitutions: [],
+            arguments: []
+        )
+        let manifest = try system.serialization.serialize(made).manifest
+        let json = #"{"callID":"\#(made.callID.uuidString)","targetIdentifier":"target","genericSubstitutions":[],"arguments":[]}"#
+
+        let decoded = try system.serialization.deserialize(
+            as: InvocationMessage.self,
+            from: Serialization.Serialized(manifest: manifest, buffer: .data(Data(json.utf8)))
+        )
+        decoded.callID.shouldEqual(made.callID)
+        decoded.recipient.shouldBeNil()
+    }
 }
 
 @Resolvable

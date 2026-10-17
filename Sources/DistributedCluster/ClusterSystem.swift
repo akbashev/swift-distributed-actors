@@ -1532,7 +1532,9 @@ extension ClusterSystem {
                     self.deadLetters.tell(DeadLetter(invocation, recipient: recipient))
                     throw DeadLetterError(recipient: recipient)
                 }
-                try self.checkRecipient(actor, id: recipient, of: invocation)
+                if let made = invocation.recipient {
+                    try self.checkRecipient(actor, id: recipient, as: made)
+                }
 
                 try await executeDistributedTarget(
                     on: actor,
@@ -1554,8 +1556,8 @@ extension ClusterSystem {
     /// A call runs only as what it was made through: on an actor of that type, or, through a
     /// protocol's stub, on an actor of the protocol. Run on any other actor, its target would be
     /// another type's method.
-    private func checkRecipient(_ actor: any DistributedActor, id: ActorID, of invocation: InvocationMessage) throws {
-        guard case .actor(let expected) = invocation.recipient else { return }
+    private func checkRecipient(_ actor: any DistributedActor, id: ActorID, as made: InvocationMessage.Recipient) throws {
+        guard case .actor(let expected) = made else { return }
         let found = Self.typeName(type(of: actor))
         guard found == expected else {
             throw ResolveError(.typeMismatch(id, expected: expected, found: found))

@@ -1191,39 +1191,44 @@ extension ClusterSystem {
     ///
     /// A ``RemoteCallInterceptor`` uses this to pass a call on to the actor that should receive it.
     /// The call goes to the actor itself: an interceptor of `id`, if any, isn't involved.
-    public func forwardCall<Err, Res>(
+    /// The call runs only on an actor of `actorType`, the type of the reference it was made on.
+    public func forwardCall<Act, Err, Res>(
         to id: ActorID,
+        as actorType: Act.Type,
         target: RemoteCallTarget,
         invocation: inout InvocationEncoder,
         throwing: Err.Type,
         returning: Res.Type
     ) async throws -> Res
-    where Err: Error, Res: Codable {
+    where Act: DistributedActor, Err: Error, Res: Codable {
         guard id.node == self.cluster.node else {
-            return try await self.sendRemoteCall(to: id, target: target, invocation: invocation, returning: returning)
+            return try await self.sendRemoteCall(to: id, as: Self.recipient(Act.self), target: target, invocation: invocation, returning: returning)
         }
         guard let actor = self.resolveLocalAnyDistributedActor(id: id) else {
             throw DeadLetterError(recipient: id)
         }
+        try self.checkRecipient(actor, id: id, as: Self.recipient(Act.self))
         return try await self.localCall(on: actor, id: id, target: target, invocation: &invocation, throwing: throwing, returning: returning)
     }
 
     /// Delivers an intercepted call that returns nothing to the actor with `id`, on this node or another.
     ///
-    /// - SeeAlso: ``forwardCall(to:target:invocation:throwing:returning:)``
-    public func forwardCallVoid<Err>(
+    /// - SeeAlso: ``forwardCall(to:as:target:invocation:throwing:returning:)``
+    public func forwardCallVoid<Act, Err>(
         to id: ActorID,
+        as actorType: Act.Type,
         target: RemoteCallTarget,
         invocation: inout InvocationEncoder,
         throwing: Err.Type
     ) async throws
-    where Err: Error {
+    where Act: DistributedActor, Err: Error {
         guard id.node == self.cluster.node else {
-            return try await self.sendRemoteCallVoid(to: id, target: target, invocation: invocation)
+            return try await self.sendRemoteCallVoid(to: id, as: Self.recipient(Act.self), target: target, invocation: invocation)
         }
         guard let actor = self.resolveLocalAnyDistributedActor(id: id) else {
             throw DeadLetterError(recipient: id)
         }
+        try self.checkRecipient(actor, id: id, as: Self.recipient(Act.self))
         try await self.localCallVoid(on: actor, id: id, target: target, invocation: &invocation, throwing: throwing)
     }
 }
@@ -1260,12 +1265,13 @@ extension ClusterSystem {
             return try await self.localCall(on: actor, target: target, invocation: &invocation, throwing: throwing, returning: returning)
         }
 
-        return try await self.sendRemoteCall(to: actor.id, target: target, invocation: invocation, returning: returning)
+        return try await self.sendRemoteCall(to: actor.id, as: Self.recipient(Act.self), target: target, invocation: invocation, returning: returning)
     }
 
     /// Sends a call to the actor with `id` on another node, and waits for its reply.
     private func sendRemoteCall<Res>(
         to id: ActorID,
+        as made: InvocationMessage.Recipient,
         target: RemoteCallTarget,
         invocation: InvocationEncoder,
         returning: Res.Type
@@ -1289,7 +1295,7 @@ extension ClusterSystem {
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
-                recipient: Self.recipient(Act.self),
+                recipient: made,
                 genericSubstitutions: invocation.genericSubstitutions,
                 arguments: arguments
             )
@@ -1332,12 +1338,13 @@ extension ClusterSystem {
             return try await self.localCallVoid(on: actor, target: target, invocation: &invocation, throwing: throwing)
         }
 
-        try await self.sendRemoteCallVoid(to: actor.id, target: target, invocation: invocation)
+        try await self.sendRemoteCallVoid(to: actor.id, as: Self.recipient(Act.self), target: target, invocation: invocation)
     }
 
     /// Sends a call that returns nothing to the actor with `id` on another node, and waits for it to finish.
     private func sendRemoteCallVoid(
         to id: ActorID,
+        as made: InvocationMessage.Recipient,
         target: RemoteCallTarget,
         invocation: InvocationEncoder
     ) async throws {
@@ -1363,7 +1370,7 @@ extension ClusterSystem {
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
-                recipient: Self.recipient(Act.self),
+                recipient: made,
                 genericSubstitutions: invocation.genericSubstitutions,
                 arguments: arguments
             )
@@ -1533,8 +1540,9 @@ extension ClusterSystem {
     /// - a reference to a remote actor forwards the call to its node;
     /// - a local actor that is no longer alive is a dead letter.
     /// `id`'s actor is the recipient of a local call on `actor`, which has that ID.
-    private func localCallRecipient(for actor: any DistributedActor, id: ActorID) throws -> any DistributedActor {
+    private func localCallRecipient<Act: DistributedActor>(for actor: Act, id: ActorID) throws -> any DistributedActor {
         if let local = self.resolveLocalAnyDistributedActor(id: id) {
+            try self.checkRecipient(local, id: id, as: Self.recipient(Act.self))
             return local
         }
         guard id.node == self.cluster.node else {

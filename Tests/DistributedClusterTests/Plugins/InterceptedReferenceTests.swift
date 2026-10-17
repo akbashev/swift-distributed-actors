@@ -163,7 +163,7 @@ private struct RoutingInterceptor: RemoteCallInterceptor {
     ) async throws -> Res
     where Act: DistributedActor, Act.ID == ActorID, Err: Error, Res: Codable {
         let (system, id) = try self.plugin.destination(of: self.name)
-        return try await system.forwardCall(to: id, target: target, invocation: &invocation, throwing: throwing, returning: returning)
+        return try await system.forwardCall(to: id, as: Act.self, target: target, invocation: &invocation, throwing: throwing, returning: returning)
     }
 
     func interceptRemoteCallVoid<Act, Err>(
@@ -174,7 +174,7 @@ private struct RoutingInterceptor: RemoteCallInterceptor {
     ) async throws
     where Act: DistributedActor, Act.ID == ActorID, Err: Error {
         let (system, id) = try self.plugin.destination(of: self.name)
-        try await system.forwardCallVoid(to: id, target: target, invocation: &invocation, throwing: throwing)
+        try await system.forwardCallVoid(to: id, as: Act.self, target: target, invocation: &invocation, throwing: throwing)
     }
 }
 

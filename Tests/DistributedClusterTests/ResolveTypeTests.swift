@@ -93,6 +93,62 @@ final class ResolveTypeTests: ClusteredActorSystemsXCTestCase {
         decoded.callID.shouldEqual(made.callID)
         decoded.recipient.shouldBeNil()
     }
+
+    /// A call forwarded through an interceptor runs only on an actor of the type of the reference
+    /// it was made on, as a call made any other way does.
+    func test_forwardedCall_toAnotherType_throws() async throws {
+        let system = await setUpNode("local")
+        let speaker = Speaker(actorSystem: system)
+        let wrong: Counter = try system.interceptCalls(
+            to: Counter.self,
+            metadata: ActorMetadata(),
+            interceptor: Forwarding(target: speaker.id)
+        )
+
+        let error = try await shouldThrow {
+            _ = try await wrong.count()
+        }
+        guard let error = error as? ResolveError, "\(error)".contains("typeMismatch") else {
+            throw TestError("Expected a ResolveError for the type mismatch, got \(error)")
+        }
+    }
+}
+
+/// Forwards every call to the actor with `target`'s ID, as a virtual actor's reference does.
+private struct Forwarding: RemoteCallInterceptor {
+    let target: ClusterSystem.ActorID
+
+    func interceptRemoteCall<Act, Err, Res>(
+        on actor: Act,
+        target: RemoteCallTarget,
+        invocation: inout ClusterSystem.InvocationEncoder,
+        throwing: Err.Type,
+        returning: Res.Type
+    ) async throws -> Res where Act: DistributedActor, Act.ID == ActorID, Err: Error, Res: Codable {
+        try await (actor.actorSystem as! ClusterSystem).forwardCall(
+            to: self.target,
+            as: Act.self,
+            target: target,
+            invocation: &invocation,
+            throwing: throwing,
+            returning: returning
+        )
+    }
+
+    func interceptRemoteCallVoid<Act, Err>(
+        on actor: Act,
+        target: RemoteCallTarget,
+        invocation: inout ClusterSystem.InvocationEncoder,
+        throwing: Err.Type
+    ) async throws where Act: DistributedActor, Act.ID == ActorID, Err: Error {
+        try await (actor.actorSystem as! ClusterSystem).forwardCallVoid(
+            to: self.target,
+            as: Act.self,
+            target: target,
+            invocation: &invocation,
+            throwing: throwing
+        )
+    }
 }
 
 @Resolvable

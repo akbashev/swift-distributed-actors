@@ -1509,25 +1509,7 @@ extension ClusterSystem {
         )
 
         let recipient = try self.localCallRecipient(for: actor, id: id)
-        let anyReturn = try await withCheckedThrowingContinuation { cc in
-            Task { [invocation] in  // FIXME: make an async stream here since we lost ordering guarantees here
-                var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
-                let directReturnHandler = ClusterInvocationResultHandler(directReturnContinuation: cc)
-
-                // Throws only before the handler sees the call (e.g. the target can't be decoded),
-                // so the continuation is still unresumed here.
-                do {
-                    try await executeDistributedTarget(
-                        on: recipient,
-                        target: target,
-                        invocationDecoder: &directDecoder,
-                        handler: directReturnHandler
-                    )
-                } catch {
-                    cc.resume(throwing: error)
-                }
-            }
-        }
+        let anyReturn = try await self.executeLocally(on: recipient, id: id, target: target, invocation: invocation)
 
         guard let wellTypedReturn = anyReturn as? Res else {
             throw RemoteCallError(
@@ -1598,25 +1580,29 @@ extension ClusterSystem {
         )
 
         let recipient = try self.localCallRecipient(for: actor, id: id)
-        _ = try await withCheckedThrowingContinuation { (cc: CheckedContinuation<Any, Error>) in
-            Task { [invocation] in
-                var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
-                let directReturnHandler = ClusterInvocationResultHandler(directReturnContinuation: cc)
+        _ = try await self.executeLocally(on: recipient, id: id, target: target, invocation: invocation)
+    }
 
-                // Throws only before the handler sees the call (e.g. the target can't be decoded),
-                // so the continuation is still unresumed here.
-                do {
-                    try await executeDistributedTarget(
-                        on: recipient,
-                        target: target,
-                        invocationDecoder: &directDecoder,
-                        handler: directReturnHandler
-                    )
-                } catch {
-                    cc.resume(throwing: error)
-                }
-            }
+    /// Executes `target` on `recipient`, the actor with `id`, in the calling task, so the target's
+    /// errors, a failure to decode the call, and the caller's cancellation all reach the caller directly.
+    private func executeLocally(
+        on recipient: any DistributedActor,
+        id: ActorID,
+        target: RemoteCallTarget,
+        invocation: InvocationEncoder
+    ) async throws -> Any {
+        var directDecoder = ClusterInvocationDecoder(system: self, invocation: invocation)
+        let directReturn = LocalCallResult()
+        try await executeDistributedTarget(
+            on: recipient,
+            target: target,
+            invocationDecoder: &directDecoder,
+            handler: ClusterInvocationResultHandler(directReturn: directReturn)
+        )
+        guard let result = directReturn.result else {
+            throw RemoteCallError(.invalidReply(UUID()), on: id, target: target)
         }
+        return try result.get()
     }
 }
 
@@ -1786,6 +1772,11 @@ extension ClusterSystem {
     }
 }
 
+/// What a local call's target returned or threw, as its ``ClusterInvocationResultHandler`` received it.
+final class LocalCallResult {
+    var result: Result<Any, any Error>?
+}
+
 public struct ClusterInvocationResultHandler: DistributedTargetInvocationResultHandler {
     public typealias SerializationRequirement = any Codable
 
@@ -1797,21 +1788,21 @@ public struct ClusterInvocationResultHandler: DistributedTargetInvocationResultH
             channel: Channel,
             recipient: ClusterSystem.ActorID  // FIXME(distributed): remove; we need it only because TransportEnvelope requires it
         )
-        case localDirectReturn(CheckedContinuation<Any, Error>)
+        case localDirectReturn(LocalCallResult)
     }
 
     init(system: ClusterSystem, callID: ClusterSystem.CallID, channel: Channel, recipient: ClusterSystem.ActorID) {
         self.state = .remoteCall(system: system, callID: callID, channel: channel, recipient: recipient)
     }
 
-    init(directReturnContinuation: CheckedContinuation<Any, Error>) {
-        self.state = .localDirectReturn(directReturnContinuation)
+    init(directReturn: LocalCallResult) {
+        self.state = .localDirectReturn(directReturn)
     }
 
     public func onReturn<Success: Codable>(value: Success) async throws {
         switch self.state {
-        case .localDirectReturn(let directReturnContinuation):
-            directReturnContinuation.resume(returning: value)
+        case .localDirectReturn(let directReturn):
+            directReturn.result = .success(value)
 
         case .remoteCall(let system, let callID, let channel, let recipient):
             system.log.trace(
@@ -1829,8 +1820,8 @@ public struct ClusterInvocationResultHandler: DistributedTargetInvocationResultH
 
     public func onReturnVoid() async throws {
         switch self.state {
-        case .localDirectReturn(let directReturnContinuation):
-            directReturnContinuation.resume(returning: ())
+        case .localDirectReturn(let directReturn):
+            directReturn.result = .success(())
 
         case .remoteCall(let system, let callID, let channel, let recipient):
             system.log.debug(
@@ -1847,8 +1838,8 @@ public struct ClusterInvocationResultHandler: DistributedTargetInvocationResultH
 
     public func onThrow<Err: Error>(error: Err) async throws {
         switch self.state {
-        case .localDirectReturn(let directReturnContinuation):
-            directReturnContinuation.resume(throwing: error)
+        case .localDirectReturn(let directReturn):
+            directReturn.result = .failure(error)
 
         case .remoteCall(let system, let callID, let channel, let recipient):
             system.log.debug("Result handler, onThrow: \(error)", metadata: ["call/id": "\(callID)"])

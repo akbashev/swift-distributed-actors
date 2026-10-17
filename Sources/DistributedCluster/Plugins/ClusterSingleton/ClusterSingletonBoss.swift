@@ -72,13 +72,16 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
     private var buffer: RemoteCallBuffer
 
     /// `Task` for subscribing to cluster events
-    private var clusterEventsSubscribeTask: Task<Void, Error>?
+    private var clusterEventsSubscribeTask: Task<Void, Never>?
 
-    /// Nodes known to host this singleton, as the receptionist reports their bosses.
-    private var hosts: Set<Cluster.Node> = []
+    /// The cluster as this node knows it, kept up to date from cluster events.
+    private var membership: Cluster.Membership = .empty
+
+    /// Nodes whose bosses checked in as able to run this singleton, as the receptionist reports them.
+    private var checkedInHosts: Set<Cluster.Node> = []
 
     /// `Task` for following the bosses of nodes that host this singleton
-    private var hostsSubscribeTask: Task<Void, Error>?
+    private var hostsSubscribeTask: Task<Void, Never>?
 
     private lazy var log = Logger(actor: self)
 
@@ -99,7 +102,7 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
             self.clusterEventsSubscribeTask = Task {
                 // Subscribe to ``Cluster/Event`` in order to update `targetNode`
                 for await event in system.cluster.events {
-                    try await self.receiveClusterEvent(event)
+                    await self.receiveClusterEvent(event)
                 }
             }
             // Only nodes that can run the singleton check in, so allocation can avoid the others.
@@ -109,7 +112,7 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
             }
             self.hostsSubscribeTask = Task {
                 for await host in await system.receptionist.listing(of: hostsKey) {
-                    try await self.receiveHost(host.id.node)
+                    await self.receiveHost(host.id.node)
                 }
             }
         } else {
@@ -136,25 +139,56 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
         DistributedReception.Key(ClusterSingletonBoss<Act>.self, id: "$singletonHosts-\(settings.name)")
     }
 
-    private func receiveClusterEvent(_ event: Cluster.Event) async throws {
+    /// The nodes that can run this singleton: members that checked in as hosts and aren't down.
+    private var hosts: Set<Cluster.Node> {
+        self.checkedInHosts.filter { node in
+            guard let member = self.membership.member(node) else { return false }
+            return !member.status.isAtLeast(.down)
+        }
+    }
+
+    private func receiveClusterEvent(_ event: Cluster.Event) async {
+        let hostsBefore = self.hosts
+        do {
+            try self.membership.apply(event: event)
+        } catch {
+            self.log.warning("Failed to apply cluster event \(event): \(error)", metadata: self.metadata())
+        }
+        // A node that's down never hosts again: a restarted node joins as a new one.
+        self.checkedInHosts = self.checkedInHosts.filter { node in
+            !(self.membership.member(node)?.status.isAtLeast(.down) ?? false)
+        }
+
         // Feed the event to `AllocationStrategy` then forward the result to `updateTargetNode`,
         // which will determine if `targetNode` has changed and react accordingly.
         var node = await self.allocationStrategy.onClusterEvent(event)
-        // A node that's down can't host the singleton any more.
-        if case .membershipChange(let change) = event, change.status.isAtLeast(.down),
-            self.hosts.remove(change.node) != nil
-        {
-            node = await self.allocationStrategy.onHostsChange(self.hosts)
+        let hosts = self.hosts
+        if hosts != hostsBefore {
+            node = await self.allocationStrategy.onHostsChange(hosts)
         }
-        try await self.updateTargetNode(node: node)
+        await self.updateTargetNode(node: node)
     }
 
-    private func receiveHost(_ node: Cluster.Node) async throws {
-        guard self.hosts.insert(node).inserted else { return }
-        try await self.updateTargetNode(node: await self.allocationStrategy.onHostsChange(self.hosts))
+    private func receiveHost(_ node: Cluster.Node) async {
+        let hostsBefore = self.hosts
+        self.checkedInHosts.insert(node)
+        let hosts = self.hosts
+        guard hosts != hostsBefore else { return }
+        await self.updateTargetNode(node: await self.allocationStrategy.onHostsChange(hosts))
     }
 
-    private func updateTargetNode(node: Cluster.Node?) async throws {
+    /// Moves the singleton to `node`. When that fails, the target is forgotten, so that
+    /// allocating the same node again tries again.
+    private func updateTargetNode(node: Cluster.Node?) async {
+        do {
+            try await self.moveTargetNode(to: node)
+        } catch {
+            self.log.warning("Failed to move singleton to [\(String(describing: node))]: \(error)", metadata: self.metadata())
+            self.targetNode = nil
+        }
+    }
+
+    private func moveTargetNode(to node: Cluster.Node?) async throws {
         guard self.targetNode != node else {
             self.log.trace("Skip updating target node. New node is already the same as current targetNode.", metadata: self.metadata())
             return
@@ -162,6 +196,12 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
 
         let previousTargetNode = self.targetNode
         self.targetNode = node
+
+        // A reference to where the singleton ran on another node is stale now: calls wait for the
+        // singleton where it runs next. One running here is handed over below, which releases it.
+        if let previous = self.targetSingleton, previous.id.node != self.selfNode {
+            self.updateSingleton(nil)
+        }
 
         switch node {
         case selfNode where self.singletonFactory == nil:
@@ -503,13 +543,8 @@ extension ClusterSingletonBoss {
             )
 
             var invocation = invocation  // can't be inout param
-            if targetNode == selfNode,
-                let singleton = self.targetSingleton
-            {
-                assert(
-                    singleton.id.node == selfNode,
-                    "Target singleton node and targetNode were not the same! TargetNode: \(targetNode?.debugDescription ?? "UNKNOWN TARGET NODE")," + " singleton.id.node: \(singleton.id.node)"
-                )
+            // Where the found singleton lives decides, as allocation may have moved on since.
+            if singleton.id.node == selfNode {
                 return try await singleton.actorSystem.localCall(
                     on: singleton,
                     target: target,
@@ -555,15 +590,9 @@ extension ClusterSingletonBoss {
         )
 
         var invocation = invocation  // can't be inout param
-        if targetNode == selfNode,
-            let singleton = self.targetSingleton
-        {
+        // Where the found singleton lives decides, as allocation may have moved on since.
+        if singleton.id.node == selfNode {
             self.log.trace("ENTER forwardOrStashRemoteCallVoid \(target) -> DIRECT LOCAL CALL")
-
-            assert(
-                singleton.id.node == selfNode,
-                "Target singleton node and targetNode were not the same! TargetNode: \(targetNode?.debugDescription ?? "UNKNOWN TARGET NODE")," + " singleton.id.node: \(singleton.id.node)"
-            )
             return try await singleton.actorSystem.localCallVoid(
                 on: singleton,
                 target: target,

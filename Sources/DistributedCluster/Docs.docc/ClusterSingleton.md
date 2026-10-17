@@ -138,6 +138,10 @@ actor CustomSingletonAllocationStrategy: ClusterSingletonAllocationStrategy {
             fatalError()
         }
     }
+
+    func onHostsChange(_ hosts: Set<Cluster.Node>) async -> Cluster.Node? {
+        fatalError()
+    }
 }
 
 distributed actor Boss: ClusterSingleton { /* ... */ }

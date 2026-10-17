@@ -29,17 +29,11 @@ public protocol ClusterSingletonAllocationStrategy {
     /// `ClusterSystem.singleton.host(type:name:settings:makeInstance:)` for it.
     ///
     /// Nodes that only proxy the singleton, or don't run the plugin at all, such as a
-    /// cluster daemon, can't run it. Strategies can use this to avoid choosing them.
+    /// cluster daemon, can't run it, so a strategy must not choose them once hosts are known.
+    /// A node that's down is no longer among `hosts`.
     ///
     /// - Returns: The current `node` after taking `hosts` into account.
     func onHostsChange(_ hosts: Set<Cluster.Node>) async -> Cluster.Node?
-}
-
-extension ClusterSingletonAllocationStrategy {
-    /// Ignores the hosting nodes, keeping the current `node`.
-    public func onHostsChange(_ hosts: Set<Cluster.Node>) async -> Cluster.Node? {
-        await self.node
-    }
 }
 
 // ==== ----------------------------------------------------------------------------------------------------------------

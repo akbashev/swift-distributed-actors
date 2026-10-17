@@ -111,6 +111,50 @@ final class ClusterSingletonPluginClusteredTests: ClusteredActorSystemsXCTestCas
         try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-2 Charlie!")
     }
 
+    func test_singletonByClusterLeadership_hostLeaves_movesToNextHost() async throws {
+        var singletonSettings = ClusterSingletonSettings()
+        singletonSettings.allocationStrategy = .byLeadership
+        singletonSettings.allocationTimeout = .seconds(15)
+
+        // The leader, but it can't host singletons, so it stays the leader while hosts leave.
+        let daemon = await self.setUpNode("daemon") { settings in
+            settings.endpoint.port = 7111
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+        }
+        let second = await self.setUpNode("second") { settings in
+            settings.endpoint.port = 8222
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+        let third = await self.setUpNode("third") { settings in
+            settings.endpoint.port = 9333
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 3)
+            settings += ClusterSingletonPlugin()
+        }
+
+        let name = "the-one"
+        let ref2 = try await second.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-2", actorSystem: actorSystem)
+        }
+        let ref3 = try await third.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-3", actorSystem: actorSystem)
+        }
+
+        second.cluster.join(endpoint: daemon.cluster.node.endpoint)
+        third.cluster.join(endpoint: daemon.cluster.node.endpoint)
+        try await self.ensureNodes(.up, on: third, within: .seconds(10), nodes: daemon.cluster.node, second.cluster.node)
+
+        try await self.assertSingletonRequestReply(second, singleton: ref2, greetingName: "Bob", expectedPrefix: "Hello-2 Bob!")
+        try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-2 Charlie!")
+
+        let secondNode = second.cluster.node
+        second.cluster.leave()
+        try await self.assertMemberStatus(on: third, node: secondNode, is: .down, within: .seconds(10))
+
+        // `third` is the only host left.
+        try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-3 Charlie!")
+    }
+
     func test_singletonByClusterLeadership_proxyOnlyLeader_runsOnLowestHost() async throws {
         var singletonSettings = ClusterSingletonSettings()
         singletonSettings.allocationStrategy = .byLeadership

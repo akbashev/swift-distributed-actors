@@ -35,6 +35,7 @@ var targets: [PackageDescription.Target] = [
             .product(name: "OrderedCollections", package: "swift-collections"),
             .product(name: "Atomics", package: "swift-atomics"),
             .product(name: "SWIM", package: "swift-cluster-membership"),
+            .product(name: "SWIMDistributed", package: "swift-cluster-membership"),
             .product(name: "NIO", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
             .product(name: "NIOFoundationCompat", package: "swift-nio"),
@@ -188,7 +189,8 @@ var targets: [PackageDescription.Target] = [
 var dependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-atomics", from: "1.1.0"),
 
-    .package(url: "https://github.com/apple/swift-cluster-membership", from: "0.4.0"),
+    // TODO: switch back to a release of apple/swift-cluster-membership which includes SWIMDistributed
+    .package(url: "https://github.com/akbashev/swift-cluster-membership", branch: "generic-distributed-swim-actor"),
 
     .package(url: "https://github.com/apple/swift-nio", from: "2.61.1"),
     .package(url: "https://github.com/apple/swift-nio-extras", from: "1.20.0"),

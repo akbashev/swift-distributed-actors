@@ -119,11 +119,7 @@ internal class ClusterShell {
         }
 
         // 2) Ensure the failure detector knows about this node
-        Task {
-            await self._swimShell.whenLocal { __secretlyKnownToBeLocal in  // TODO(distributed): rename once https://github.com/apple/swift/pull/42098 is implemented
-                __secretlyKnownToBeLocal.monitor(node: associated.handshake.remoteNode)
-            }
-        }
+        self.monitorWithSWIM(associated.handshake.remoteNode)
     }
 
     /// Performs all cleanups related to terminating an association:
@@ -154,7 +150,7 @@ internal class ClusterShell {
         // it's gossip will also propagate the information through the cluster
         traceLog_Remote(system.cluster.node, "Finish terminate association [\(remoteNode)]: Notifying SWIM, .confirmDead")
         system.log.warning("Confirm .dead to underlying SWIM, node: \(reflecting: remoteNode)")
-        self._swimShell.confirmDead(node: remoteNode)
+        self.confirmDeadToSWIM(remoteNode)
 
         // it is important that we first check the contains; as otherwise we'd re-add a .down member for what was already removed (!)
         if state.membership.contains(remoteNode) {
@@ -245,7 +241,8 @@ internal class ClusterShell {
         return pool
     }
 
-    internal private(set) var _swimShell: SWIMActor!
+    internal var _swimShell: ClusterSWIMActor!
+    internal var _swimTask: Task<Void, Never>?
 
     private var clusterEvents: ClusterEventStream!
 
@@ -289,9 +286,7 @@ internal class ClusterShell {
         let ref = try system._spawnSystemActor(ClusterShell.naming, self.bind(), props: self.props)
         self._ref = ref
 
-        await _Props.$forSpawn.withValue(SWIMActor.props) {
-            self._swimShell = await SWIMActor(settings: self.settings.swim, clusterRef: ref, system: system)
-        }
+        self.startSWIM(settings: self.settings, system: system, clusterRef: ref)
 
         return ref
     }
@@ -669,7 +664,7 @@ extension ClusterShell {
 
     func tryConfirmDeadToSWIM(_ context: _ActorContext<Message>, _ state: ClusterShellState, change: Cluster.MembershipChange) {
         if change.status.isAtLeast(.down) {
-            self._swimShell.confirmDead(node: change.member.node)
+            self.confirmDeadToSWIM(change.member.node)
         }
     }
 
@@ -1255,6 +1250,7 @@ extension ClusterShell {
         context.children.forEach { ref in
             context.unwatch(ref)
         }
+        self._swimTask?.cancel()
 
         let addrDesc = "\(state.settings.bindNode.endpoint.host):\(state.settings.bindNode.endpoint.port)"
         return context.awaitResult(of: state.channel.close(), timeout: context.system.settings.unbindTimeout) {
@@ -1326,7 +1322,7 @@ extension ClusterShell {
         }
 
         // whenever we down a node we must ensure to confirm it to swim, so it won't keep monitoring it forever needlessly
-        self._swimShell.confirmDead(node: memberToDown.node)
+        self.confirmDeadToSWIM(memberToDown.node)
 
         if memberToDown.node == state.selfNode {
             // ==== ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

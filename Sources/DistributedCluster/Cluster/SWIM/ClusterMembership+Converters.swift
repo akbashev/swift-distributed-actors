@@ -29,14 +29,6 @@ extension ClusterMembership.Node {
         )
     }
 
-    func swimShell(_ system: ClusterSystem) -> SWIMActor {
-        do {
-            return try SWIMActor.resolve(id: ._swim(on: self.asClusterNode!), using: system)
-        } catch {
-            fatalError("Failed to resolve \(ActorID._swim(on: self.asClusterNode!).detailedDescription): \(error), tree: \n\(system._treeString())")
-        }
-    }
-
     var asClusterNode: Cluster.Node? {
         guard let uid = self.uid else {
             return nil

@@ -21,9 +21,9 @@ import SWIMDistributed
 /// The failure detector of the cluster.
 ///
 /// - SeeAlso: `SWIM.Instance` for detailed documentation about the SWIM protocol implementation.
-internal typealias ClusterSWIMActor = SWIMDistributed.SWIMActor<ClusterSystem>
+internal typealias ClusterSWIMShell = SWIM.Shell<ClusterSystem>
 
-extension SWIMDistributed.SWIMActor where System == ClusterSystem {
+extension SWIM.Shell where System == ClusterSystem {
     static var props: _Props {
         var ps = _Props()
         ps._knownActorName = ActorPath._swim.name
@@ -46,7 +46,7 @@ extension ActorPath {
 // MARK: Running SWIM in the cluster
 
 extension ClusterShell {
-    /// Spawns the well-known `ClusterSWIMActor` of this node and starts running it.
+    /// Spawns the well-known `ClusterSWIMShell` of this node and starts running it.
     func startSWIM(settings: ClusterSystemSettings, system: ClusterSystem, clusterRef: ClusterShell.Ref) {
         guard settings.swim.initialContactPoints.isEmpty else {
             fatalError(
@@ -61,8 +61,8 @@ extension ClusterShell {
         swimSettings.metrics.systemName = system.settings.metrics.systemName
         let selfNode = settings.bindNode
 
-        let swim = _Props.$forSpawn.withValue(ClusterSWIMActor.props) {
-            ClusterSWIMActor(
+        let swim = _Props.$forSpawn.withValue(ClusterSWIMShell.props) {
+            ClusterSWIMShell(
                 settings: .init(
                     swim: swimSettings,
                     myself: selfNode.asSWIMNode,
@@ -70,7 +70,7 @@ extension ClusterShell {
                         guard let system, let clusterNode = node.asClusterNode else {
                             return nil
                         }
-                        return try? ClusterSWIMActor.resolve(id: ._swim(on: clusterNode), using: system)
+                        return try? ClusterSWIMShell.resolve(id: ._swim(on: clusterNode), using: system)
                     }
                 ),
                 actorSystem: system
@@ -85,7 +85,7 @@ extension ClusterShell {
     }
 
     /// Runs `swim` and forwards its reachability changes to the cluster shell, until cancelled.
-    private static func runSWIM(_ swim: ClusterSWIMActor, selfNode: Cluster.Node, clusterRef: ClusterShell.Ref, log: Logger) async {
+    private static func runSWIM(_ swim: ClusterSWIMShell, selfNode: Cluster.Node, clusterRef: ClusterShell.Ref, log: Logger) async {
         guard let changes = await swim.whenLocal({ $0.membershipChanges }) else {
             return
         }

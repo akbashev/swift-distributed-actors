@@ -241,7 +241,7 @@ internal class ClusterShell {
         return pool
     }
 
-    internal var _swimShell: ClusterSWIMActor!
+    internal var _swimShell: ClusterSWIMShell!
     internal var _swimTask: Task<Void, Never>?
 
     private var clusterEvents: ClusterEventStream!

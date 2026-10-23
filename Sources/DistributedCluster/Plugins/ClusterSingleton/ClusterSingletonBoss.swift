@@ -258,7 +258,11 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
             // Finally, release the singleton -- it should not have been refered to strongly by anyone else,
             // causing the instance to be released. TODO: we could assert that we have released it soon after here (it's ID must be resigned).
             self.actorSystem.releaseWellKnownActorID(instance.id)
-            self.updateSingleton(nil)
+            // While it passivated, the boss may have found the singleton where it runs now: only the
+            // one handed over is gone.
+            if self.targetSingleton?.id == instance.id {
+                self.updateSingleton(nil)
+            }
         }
     }
 

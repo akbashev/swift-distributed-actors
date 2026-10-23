@@ -194,6 +194,45 @@ final class ClusterSingletonPluginClusteredTests: ClusteredActorSystemsXCTestCas
         try await self.assertSingletonRequestReply(third, singleton: ref3, greetingName: "Charlie", expectedPrefix: "Hello-2 Charlie!")
     }
 
+    /// A node that led alone hands its singleton over when it joins a lower node. Its singleton may
+    /// finish passivating after the boss already follows the one on the new leader: calls must still
+    /// reach that one, not wait for a singleton forever.
+    func test_singletonByClusterLeadership_handOverFinishingLate_keepsTheNewSingleton() async throws {
+        var singletonSettings = ClusterSingletonSettings()
+        singletonSettings.allocationStrategy = .byLeadership
+
+        let first = await self.setUpNode("first") { settings in
+            settings.endpoint.port = 7111
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 1)
+            settings += ClusterSingletonPlugin()
+        }
+        let second = await self.setUpNode("second") { settings in
+            settings.endpoint.port = 8222
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 1)
+            settings += ClusterSingletonPlugin()
+        }
+
+        let name = "the-one"
+        _ = try await first.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-1", actorSystem: actorSystem)
+        }
+        let ref2 = try await second.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello-2", passivation: .seconds(2), actorSystem: actorSystem)
+        }
+
+        // Each leads alone at first, and runs its own.
+        try await first.cluster.joined(within: .seconds(10))
+        try await second.cluster.joined(within: .seconds(10))
+        try await self.assertSingletonRequestReply(second, singleton: ref2, greetingName: "Bob", expectedPrefix: "Hello-2 Bob!")
+
+        // `first` leads once they're joined: `second` hands its singleton over, slowly.
+        second.cluster.join(endpoint: first.cluster.node.endpoint)
+        try await self.ensureNodes(.up, on: second, within: .seconds(10), nodes: first.cluster.node)
+
+        try await Task.sleep(for: .seconds(3))  // the hand-over has finished passivating
+        try await self.assertSingletonRequestReply(second, singleton: ref2, greetingName: "Charlie", expectedPrefix: "Hello-1 Charlie!")
+    }
+
     func test_singleton_lifecycle() async throws {
         var singletonSettings = ClusterSingletonSettings()
         singletonSettings.allocationStrategy = .byLeadership
@@ -527,10 +566,17 @@ distributed actor TheSingleton: ClusterSingleton {
     typealias ActorSystem = ClusterSystem
 
     private let greeting: String
+    /// How long it takes to passivate, as one that flushes its writes might.
+    private let passivation: Duration
 
-    init(greeting: String, actorSystem: ActorSystem) {
+    init(greeting: String, passivation: Duration = .zero, actorSystem: ActorSystem) {
         self.actorSystem = actorSystem
         self.greeting = greeting
+        self.passivation = passivation
+    }
+
+    func passivateSingleton() async {
+        try? await Task.sleep(for: self.passivation)
     }
 
     distributed func greet(name: String) -> String {

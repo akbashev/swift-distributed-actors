@@ -39,6 +39,9 @@ public struct ClusterSystemSettings {
 
     internal var actorMetadata: ActorIDMetadataSettings = .default
 
+    /// The task-locals that travel with remote calls, declared with ``propagateTaskLocal(_:as:)``.
+    internal var taskLocalPropagation = TaskLocalPropagation()
+
     /// Configuration of cluster system plugins.
     ///
     /// Mostly used to enable additional plugins during initial system configuration.

@@ -1218,13 +1218,15 @@ extension ClusterSystem {
 
         let recipient = _RemoteClusterActorPersonality<InvocationMessage>(shell: clusterShell, id: actor.id._asRemote, system: self)
         let arguments = invocation.arguments
+        let taskLocals = try self.settings.taskLocalPropagation.values(using: self.serialization)
 
         let reply: RemoteCallReply<Res> = try await self.withCallID(on: actor.id, target: target) { callID in
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
                 genericSubstitutions: invocation.genericSubstitutions,
-                arguments: arguments
+                arguments: arguments,
+                taskLocals: taskLocals
             )
 
             recipient.sendInvocation(invocation)
@@ -1282,13 +1284,15 @@ extension ClusterSystem {
 
         let recipient = _RemoteClusterActorPersonality<InvocationMessage>(shell: clusterShell, id: actor.id._asRemote, system: self)
         let arguments = invocation.arguments
+        let taskLocals = try self.settings.taskLocalPropagation.values(using: self.serialization)
 
         let reply: RemoteCallReply<_Done> = try await self.withCallID(on: actor.id, target: target) { callID in
             let invocation = InvocationMessage(
                 callID: callID,
                 targetIdentifier: target.identifier,
                 genericSubstitutions: invocation.genericSubstitutions,
-                arguments: arguments
+                arguments: arguments,
+                taskLocals: taskLocals
             )
             recipient.sendInvocation(invocation)
         }
@@ -1507,12 +1511,19 @@ extension ClusterSystem {
                     throw DeadLetterError(recipient: recipient)
                 }
 
-                try await executeDistributedTarget(
-                    on: actor,
-                    target: target,
-                    invocationDecoder: &decoder,
-                    handler: resultHandler
-                )
+                // The target runs with the caller's task-locals declared to travel, as a local call would.
+                try await self.settings.taskLocalPropagation.running(
+                    with: invocation.taskLocals,
+                    using: self.serialization,
+                    log: self.log
+                ) {
+                    try await executeDistributedTarget(
+                        on: actor,
+                        target: target,
+                        invocationDecoder: &decoder,
+                        handler: resultHandler
+                    )
+                }
             } catch {
                 // FIXME(distributed): is this right?
                 do {

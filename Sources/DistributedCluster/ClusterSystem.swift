@@ -63,7 +63,7 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
     // Access MUST be protected with `namingLock`.
     private var _managedRefs: [ActorID: _ReceivesSystemMessages] = [:]
     private var _managedDistributedActors: WeakAnyDistributedActorDictionary = .init()
-    private var _reservedNames: Set<ActorID> = []
+    internal var _reservedNames: Set<ActorID> = []
 
     typealias WellKnownName = String
     private var _managedWellKnownDistributedActors: [WellKnownName: any DistributedActor] = [:]
@@ -742,7 +742,12 @@ extension ClusterSystem: _ActorRefFactory {
                 name = naming.makeName(&namingContext)
             }
 
-            let id = try provider.rootAddress.makeChildID(name: name, incarnation: incarnation)
+            var id = try provider.rootAddress.makeChildID(name: name, incarnation: incarnation)
+            // A well-known ID is hashed and compared by its name: it has it before it's reserved,
+            // or it's no longer found among the reserved IDs once it has.
+            if let wellKnownName = props._wellKnownName {
+                id.metadata.wellKnown = wellKnownName
+            }
             guard self._reservedNames.insert(id).inserted else {
                 fatalError(
                     """
@@ -1035,7 +1040,10 @@ extension ClusterSystem {
         }
 
         if let wellKnownName = props._wellKnownName {
-            id.metadata.wellKnown = wellKnownName
+            // Reserved with it; metadata from a base context doesn't have it yet.
+            if id.metadata.wellKnown == nil {
+                id.metadata.wellKnown = wellKnownName
+            }
             id.metadata._props = _PropsShuttle(props: props)
         }
         //        if let wellKnownName = props.metadata.remove(forKey: ActorMetadataKeys.__instance.wellKnown) {

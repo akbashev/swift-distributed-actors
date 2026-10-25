@@ -65,6 +65,10 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
     /// or nil otherwise - meaning that the singleton instance is actually located on another member.
     private var targetSingleton: Act?
 
+    /// The hand-over of an instance this node ran, while it passivates and releases its name. A new
+    /// instance here waits for it: it takes the same name.
+    private var handingOver: Task<Void, Never>?
+
     private var allocationStatus: AllocationStatus = .pending
     private var allocationTimeoutTask: Task<Void, Error>?
 
@@ -179,7 +183,7 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
 
     /// Moves the singleton to `node`. When that fails, the target is forgotten, so that
     /// allocating the same node again tries again.
-    private func updateTargetNode(node: Cluster.Node?) async {
+    internal func updateTargetNode(node: Cluster.Node?) async {
         do {
             try await self.moveTargetNode(to: node)
         } catch {
@@ -227,6 +231,12 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
 
         self.log.debug("Take over singleton [\(self.settings.name)] from [\(String(describing: from))]", metadata: self.metadata())
 
+        // An instance handed over from here may still be passivating, under the name the new one
+        // takes: it's gone once its hand-over ends. While it waits, the singleton may move on again.
+        let target = self.targetNode
+        await self.handingOver?.value
+        guard self.targetNode == target else { return }
+
         if let existing = self.targetSingleton {
             self.log.warning(
                 "Singleton taking over from \(String(describing: from)), however local active instance already available: \(existing) (\(existing.id)). This is suspicious, we should have only activated the instance once we became active."
@@ -246,7 +256,9 @@ internal distributed actor ClusterSingletonBoss<Act: ClusterSingleton>: ClusterS
 
         self.log.debug("Hand over singleton [\(self.settings.name)] to [\(String(describing: to))]", metadata: self.metadata())
 
-        Task {
+        let previous = self.handingOver
+        self.handingOver = Task {
+            await previous?.value
             // we ask the singleton to passivate, it may want to flush some writes or similar.
             await instance.whenLocal { [log] in
                 log.debug("Passivating singleton \(instance.id)...")

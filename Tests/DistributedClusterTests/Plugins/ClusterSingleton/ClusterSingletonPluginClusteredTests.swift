@@ -233,6 +233,33 @@ final class ClusterSingletonPluginClusteredTests: ClusteredActorSystemsXCTestCas
         try await self.assertSingletonRequestReply(second, singleton: ref2, greetingName: "Charlie", expectedPrefix: "Hello-1 Charlie!")
     }
 
+    func test_singleton_movedAwayAndBackWhileHandingOver_runsOnceAgain() async throws {
+        var singletonSettings = ClusterSingletonSettings()
+        singletonSettings.allocationStrategy = .byLeadership
+
+        let first = await self.setUpNode("first") { settings in
+            settings.endpoint.port = 7111
+            settings.autoLeaderElection = .lowestReachable(minNumberOfMembers: 1)
+            settings += ClusterSingletonPlugin()
+        }
+
+        let name = "the-one"
+        let ref = try await first.singleton.host(name: name, settings: singletonSettings) { actorSystem in
+            TheSingleton(greeting: "Hello", passivation: .seconds(2), actorSystem: actorSystem)
+        }
+        try await first.cluster.joined(within: .seconds(10))
+        try await self.assertSingletonRequestReply(first, singleton: ref, greetingName: "Bob", expectedPrefix: "Hello Bob!")
+
+        // The singleton moves away, and back before the instance it handed over has passivated.
+        let boss = await first.singleton._boss(name: name, type: TheSingleton.self)!
+        await boss.whenLocal { boss in
+            await boss.updateTargetNode(node: nil)
+            await boss.updateTargetNode(node: first.cluster.node)
+        }
+
+        try await self.assertSingletonRequestReply(first, singleton: ref, greetingName: "Charlie", expectedPrefix: "Hello Charlie!")
+    }
+
     func test_singleton_lifecycle() async throws {
         var singletonSettings = ClusterSingletonSettings()
         singletonSettings.allocationStrategy = .byLeadership

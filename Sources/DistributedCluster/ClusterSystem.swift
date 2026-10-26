@@ -63,7 +63,7 @@ public class ClusterSystem: DistributedActorSystem, @unchecked Sendable {
     // Access MUST be protected with `namingLock`.
     private var _managedRefs: [ActorID: _ReceivesSystemMessages] = [:]
     private var _managedDistributedActors: WeakAnyDistributedActorDictionary = .init()
-    internal var _reservedNames: Set<ActorID> = []
+    private var _reservedNames: Set<ActorID> = []
 
     typealias WellKnownName = String
     private var _managedWellKnownDistributedActors: [WellKnownName: any DistributedActor] = [:]

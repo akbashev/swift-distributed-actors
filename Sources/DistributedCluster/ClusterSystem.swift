@@ -1115,7 +1115,10 @@ extension ClusterSystem {
         self.namingLock.withLockVoid {
             self._reservedNames.remove(id)
             if let ref = self._managedRefs.removeValue(forKey: id) {
-                ref._sendSystemMessage(.stop, file: #filePath, line: #line)
+                // Stopped by its parent, as any child is: its name is free once it has ended.
+                let provider: _ActorRefProvider =
+                    id.path.isChildPathOf(self.systemProvider.rootAddress.path) ? self.systemProvider : self.userProvider
+                provider.stop(child: ref)
             }
         }
         id.context.terminate()

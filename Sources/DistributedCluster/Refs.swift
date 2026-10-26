@@ -659,6 +659,16 @@ public class _Guardian {
         }
     }
 
+    /// Stops `child`: it's no longer among the children by its name, so the name is free at once,
+    /// and it's waited for as stopping until it has stopped. One that isn't a child, such as one
+    /// stopped already as all are, is stopped all the same.
+    func stop(child: _ReceivesSystemMessages) {
+        self._childrenLock.synchronized {
+            _ = self._children.markAsStoppingChild(identifiedBy: child.id)
+        }
+        child._sendSystemMessage(.stop, file: #filePath, line: #line)
+    }
+
     func stopChild(_ childRef: _AddressableActorRef) throws {
         try self._childrenLock.synchronized {
             guard self._children.contains(identifiedBy: childRef.id) else {

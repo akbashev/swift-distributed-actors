@@ -42,6 +42,10 @@ internal protocol _ActorRefProvider: _ActorTreeTraversable {
 
     /// Stops all actors created by this `_ActorRefProvider` and blocks until they have all stopped.
     func stopAll()
+
+    /// Stops `child`, an actor this provider spawned: its name is free at once, as a child's an
+    /// actor stops is, while it finishes stopping.
+    func stop(child: _ReceivesSystemMessages)
 }
 
 // ==== ----------------------------------------------------------------------------------------------------------------
@@ -92,6 +96,10 @@ extension RemoteActorRefProvider {
 
     func stopAll() {
         self.localProvider.stopAll()
+    }
+
+    func stop(child: _ReceivesSystemMessages) {
+        self.localProvider.stop(child: child)
     }
 
     public func _traverse<T>(context: _TraversalContext<T>, _ visit: (_TraversalContext<T>, _AddressableActorRef) -> _TraversalDirective<T>) -> _TraversalResult<T> {
@@ -177,6 +185,10 @@ internal struct LocalActorRefProvider: _ActorRefProvider {
 
             return actor
         }
+    }
+
+    internal func stop(child: _ReceivesSystemMessages) {
+        self.root.stop(child: child)
     }
 
     internal func stopAll() {
